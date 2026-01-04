@@ -1,0 +1,423 @@
+@import "tailwindcss";
+
+
+/* Add debug styles to see sakura container */
+.sakura-blossom {
+  border: 2px solid red !important; /* For debugging */
+}
+
+.petal {
+  border: 1px solid blue !important; /* For debugging */
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}
+/* Sakura effect enhancements */
+@keyframes sakura-glow {
+  0%, 100% { 
+    filter: brightness(1) blur(0px);
+    transform: scale(1);
+  }
+  50% { 
+    filter: brightness(1.2) blur(1px);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes sakura-wind {
+  0% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(5px) rotate(2deg); }
+  50% { transform: translateX(0) rotate(0deg); }
+  75% { transform: translateX(-5px) rotate(-2deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+
+.sakura-layer {
+  animation: sakura-wind 15s ease-in-out infinite;
+}
+
+.sakura-glow {
+  animation: sakura-glow 4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.1s);
+}
+
+/* Glass morphism for content */
+.glass-panel {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.glass-panel-dark {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Subtle text shadow for readability */
+.text-sakura {
+  text-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Floating animation for elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.floating {
+  animation: float 6s ease-in-out infinite;
+}
+/* Add this to your global styles or in a style tag */
+@keyframes wave {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-wave {
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+/* Add smooth transitions for profile avatars */
+.profile-avatar-transition {
+  transition: all 0.3s ease;
+}
+
+.profile-avatar-transition:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+}
+/* OpenForge DAO Landing Page Styles */
+
+/* Color Variables */
+:root {
+  --dao-primary: #8b5cf6;
+  --dao-primary-dark: #7c3aed;
+  --dao-primary-light: #a78bfa;
+  --dao-secondary: #10b981;
+  --dao-secondary-dark: #059669;
+  --dao-accent: #f59e0b;
+  --dao-bg-dark: #0f172a;
+  --dao-bg-light: #1e293b;
+  --dao-text-primary: #f1f5f9;
+  --dao-text-secondary: #94a3b8;
+  --dao-card-bg: rgba(30, 41, 59, 0.5);
+  --dao-border: rgba(139, 92, 246, 0.2);
+}
+
+/* Animations */
+@keyframes dao-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes dao-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.5);
+  }
+}
+
+@keyframes dao-shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes dao-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation Classes */
+.dao-animate-float {
+  animation: dao-float 6s ease-in-out infinite;
+}
+
+.dao-animate-glow {
+  animation: dao-glow 3s ease-in-out infinite;
+}
+
+.dao-animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+  background-size: 1000px 100%;
+  animation: dao-shimmer 4s infinite linear;
+}
+
+.dao-animate-fade-in {
+  animation: dao-fade-in 0.8s ease-out forwards;
+}
+
+/* Typography */
+.dao-heading {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.dao-subheading {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.dao-body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  line-height: 1.7;
+}
+
+/* Gradient Text */
+.dao-gradient-text {
+  background: linear-gradient(135deg, var(--dao-primary), var(--dao-primary-light), #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dao-gradient-text-secondary {
+  background: linear-gradient(135deg, var(--dao-secondary), #34d399, var(--dao-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass Effects */
+.dao-glass {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--dao-border);
+}
+
+.dao-glass-light {
+  background: rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(139, 92, 246, 0.1);
+}
+
+/* Buttons */
+.dao-btn-primary {
+  background: linear-gradient(135deg, var(--dao-primary), var(--dao-primary-dark));
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dao-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
+}
+
+.dao-btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: 0.5s;
+}
+
+.dao-btn-primary:hover::after {
+  left: 100%;
+}
+
+.dao-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--dao-primary);
+  color: var(--dao-primary-light);
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.dao-btn-secondary:hover {
+  background: rgba(139, 92, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Cards */
+.dao-card {
+  background: var(--dao-card-bg);
+  border: 1px solid var(--dao-border);
+  transition: all 0.3s ease;
+}
+
+.dao-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(139, 92, 246, 0.4);
+  box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2);
+}
+
+.dao-card-feature {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(167, 139, 250, 0.05));
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  transition: all 0.3s ease;
+}
+
+.dao-card-feature:hover {
+  transform: translateY(-3px);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+/* Custom Scrollbar */
+.dao-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dao-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.dao-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--dao-primary), var(--dao-primary-light));
+  border-radius: 3px;
+}
+
+/* Background Patterns */
+.dao-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.dao-dot-pattern {
+  background-image: radial-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Badges */
+.dao-badge {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(167, 139, 250, 0.1));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: var(--dao-primary-light);
+  font-weight: 500;
+}
+
+.dao-badge-success {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.1));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.dao-badge-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.1));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+/* Status Indicators */
+.dao-status-active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.dao-status-pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.dao-status-completed {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dao-responsive-heading {
+    font-size: 2.5rem;
+  }
+  
+  .dao-responsive-subheading {
+    font-size: 1.25rem;
+  }
+}
+
+/* Timeline */
+.dao-timeline-item {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.dao-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dao-primary);
+  border: 3px solid var(--dao-bg-dark);
+}
+
+.dao-timeline-item::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1.5rem;
+  width: 2px;
+  height: calc(100% - 0.5rem);
+  background: rgba(139, 92, 246, 0.3);
+}
+
+.dao-timeline-item:last-child::after {
+  display: none;
+}
+/* Add to your global CSS */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+.transform-gpu {
+  transform: translate3d(0, 0, 0);
+}
