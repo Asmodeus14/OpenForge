@@ -68,6 +68,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/create" element={<CreateProject />} />
+          <Route path="/create-project" element ={<CreateProject/>}/>
           <Route path="/projects" element={<ProjectView_Personal />} />
           <Route path="/chat" element={<ModernChatPage />} />
           <Route path="/messages" element={<ModernChatPage />} />
