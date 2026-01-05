@@ -1,23 +1,12 @@
-export function validateImage(
-  file: File,
-  type: "avatar" | "project"
-) {
-  const MAX_SIZE_KB =
-    type === "avatar" ? 512 : 2048;
+export function validateImage(file: File) {
+  const MAX_SIZE_MB = 5;
+  const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
-  const ALLOWED_TYPES = [
-    "image/png",
-    "image/svg+xml"
-  ];
-
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error("Only PNG or SVG images are allowed");
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Only image files are allowed");
   }
 
-  const sizeKB = file.size / 1024;
-  if (sizeKB > MAX_SIZE_KB) {
-    throw new Error(
-      `Image too large. Max allowed is ${MAX_SIZE_KB} KB`
-    );
+  if (file.size > MAX_SIZE_BYTES) {
+    throw new Error("Image too large. Max allowed size is 5 MB");
   }
 }
