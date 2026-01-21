@@ -13,7 +13,7 @@ import ModernChatPage from "./pages/Chat"
 import ProfileAddressPage from "./pages/Profile-Public"
 
 import React from "react"
-import Land from "./pages/Land"
+import LandingPage from "./pages/Land";
 import MilestonesPage from "./pages/EsCrow"
 import ProjectView from "./pages/ProjectView-Homepage"
 import ProfilePublicMilestone from "./pages/Profile-Public-Milestone"
@@ -68,7 +68,7 @@ function App() {
       <Analytics/>
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<Land />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/home" element={<HomeLand />} />
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<Profile />} />
