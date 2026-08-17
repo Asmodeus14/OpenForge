@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Divider, Page, Section } from '@/components/ui/Layout';
 import { StatusPill } from '@/components/ui/Badge';
+import { buttonClasses } from '@/components/ui/buttonStyles';
 import { AddressDisplay, DisclosureNote, TechnicalDetails } from '@/components/trust/Trust';
 import { FactList } from '@/components/trust/Trust';
 import { DEFAULT_CHAIN } from '@/chain/config';
@@ -147,6 +148,26 @@ export default async function ProjectPage({ params }: Props) {
               : []),
           ]}
         />
+      </Section>
+
+      {/* The two registries are disjoint by design: a project registered here
+          has no escrow, and an escrow's project lives in a different contract
+          with its own ids. Saying so is better than leaving a funding figure
+          conspicuously absent and letting people assume it is zero. */}
+      <Section title="Funding">
+        <p className="max-w-2xl text-body text-fg-secondary">
+          This entry is a description of a project. It does not hold funds — money on
+          OpenForge lives in a separate milestone escrow contract, deployed per agreement
+          between a funder and a developer.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/escrow/new" className={buttonClasses({ variant: 'primary' })}>
+            Fund this work through an escrow
+          </Link>
+          <Link href="/funding" className={buttonClasses()}>
+            See what&rsquo;s already funded
+          </Link>
+        </div>
       </Section>
 
       <Section title="Verify">

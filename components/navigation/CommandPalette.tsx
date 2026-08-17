@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Clock,
   FolderGit2,
+  HandCoins,
   Plus,
   Search,
   Wallet,
@@ -243,11 +244,21 @@ function CommandPalette() {
                   <Item icon={<Plus className="size-4" aria-hidden />} label="Create a project" />
                 </Command.Item>
                 <Command.Item
-                  value="deploy escrow milestone contract"
+                  value="deploy escrow milestone contract fund work"
                   onSelect={() => go('/escrow/new')}
                   className="of-cmd-item group"
                 >
                   <Item icon={<Wallet className="size-4" aria-hidden />} label="Deploy an escrow" />
+                </Command.Item>
+                <Command.Item
+                  value="funding funded who is funding how much money public escrows"
+                  onSelect={() => go('/funding')}
+                  className="of-cmd-item group"
+                >
+                  <Item
+                    icon={<HandCoins className="size-4" aria-hidden />}
+                    label="See what's funded"
+                  />
                 </Command.Item>
               </Command.Group>
 

@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Compass,
   FolderGit2,
+  HandCoins,
   LayoutDashboard,
   MessageSquare,
   Settings,
@@ -42,7 +43,13 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Ecosystem',
-    items: [{ label: 'Discover', href: '/discover', icon: Compass, primary: true }],
+    items: [
+      { label: 'Discover', href: '/discover', icon: Compass, primary: true },
+      // Deliberately separate from Workspace → Escrow. That one is "escrows
+      // you are party to"; this one is "every escrow there is", and needs no
+      // wallet at all.
+      { label: 'Funding', href: '/funding', icon: HandCoins },
+    ],
   },
   {
     label: 'System',

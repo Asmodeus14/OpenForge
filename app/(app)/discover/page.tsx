@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Compass, Plus } from 'lucide-react';
+import { Compass, HandCoins, Plus } from 'lucide-react';
 import { Page, PageHeader } from '@/components/ui/Layout';
 import { EmptyState } from '@/components/ui/States';
 import { buttonClasses } from '@/components/ui/buttonStyles';
@@ -27,10 +27,19 @@ export default async function DiscoverPage() {
         title="Discover"
         description="Every project registered on the OpenForge project registry."
         actions={
-          <Link href="/projects/new" className={buttonClasses({ variant: 'primary' })}>
-            <Plus className="size-4" aria-hidden />
-            New project
-          </Link>
+          <>
+            {/* Projects here are descriptions, not escrows. Pointing at
+                Funding keeps that distinction navigable rather than leaving
+                people to wonder where the money is. */}
+            <Link href="/funding" className={buttonClasses()}>
+              <HandCoins className="size-4" aria-hidden />
+              Funding
+            </Link>
+            <Link href="/projects/new" className={buttonClasses({ variant: 'primary' })}>
+              <Plus className="size-4" aria-hidden />
+              New project
+            </Link>
+          </>
         }
       />
 

@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, ExternalLink } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, Minus } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { buttonClasses } from '@/components/ui/buttonStyles';
 import { MarketingHeader, MarketingFooter } from '@/components/marketing/MarketingChrome';
+import { EscrowIllustration } from '@/components/marketing/EscrowIllustration';
 import { DEFAULT_CHAIN, PROTOCOL } from '@/chain/config';
 import { formatDuration } from '@/lib/format';
 
@@ -68,61 +70,81 @@ export default function LandingPage() {
 
       <main id="main" className="flex-1">
         {/* ------------------------------------------------------------ hero */}
-        <section className="mx-auto max-w-(--container-app) px-5 pt-20 pb-16 sm:px-8 sm:pt-28 sm:pb-24">
-          <p className="text-meta font-medium uppercase tracking-wide text-fg-muted">
-            {DEFAULT_CHAIN.label} · prototype
-          </p>
+        <section className="relative overflow-hidden">
+          {/* One soft accent wash behind the headline — the only decoration on
+              the page, sitting behind content rather than competing with it. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-40 h-[32rem] opacity-60 [background:radial-gradient(58%_50%_at_50%_50%,var(--accent-subtle),transparent_70%)]"
+          />
 
-          <h1 className="mt-5 max-w-4xl text-hero text-fg">
-            Fund open source work
-            <br />
-            one milestone at a time.
-          </h1>
+          <div className="relative mx-auto grid max-w-(--container-app) gap-14 px-5 pt-16 pb-20 sm:px-8 sm:pt-24 lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-center lg:gap-16 lg:pb-28">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-subtle px-3 py-1 text-micro font-medium text-fg-secondary">
+                <span className="size-1.5 rounded-full bg-success" aria-hidden />
+                Live on {DEFAULT_CHAIN.label}
+              </span>
 
-          <p className="mt-7 max-w-2xl text-lead text-fg-secondary">
-            OpenForge puts a funder&rsquo;s money into a contract before the work starts, and
-            pays it out only as each agreed milestone is approved. The developer can see the
-            funds exist. The funder never pays for work that was not delivered.
-          </p>
+              <h1 className="mt-6 text-hero text-fg">
+                Fund open source work
+                <br />
+                one milestone at a time.
+              </h1>
 
-          <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link href="/overview" className={buttonClasses({ variant: 'primary', size: 'lg' })}>
-              Open the app
-              <ArrowRight className="size-4" aria-hidden />
-            </Link>
-            <Link href="/discover" className={buttonClasses({ size: 'lg' })}>
-              Browse projects
-            </Link>
+              <p className="mt-7 max-w-xl text-lead text-fg-secondary">
+                The money goes into a contract before the work starts. The developer can see
+                it is there. The funder releases it piece by piece, and only for work that
+                was actually delivered.
+              </p>
+
+              <div className="mt-10 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/overview"
+                  className={buttonClasses({ variant: 'primary', size: 'lg' })}
+                >
+                  Open the app
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+                <Link href="/funding" className={buttonClasses({ size: 'lg' })}>
+                  See what&rsquo;s funded
+                </Link>
+              </div>
+
+              <p className="mt-8 max-w-xl text-secondary text-fg-muted">
+                Tokens on {DEFAULT_CHAIN.label} have no monetary value and come free from a
+                faucet. Do not connect a wallet holding real funds.
+              </p>
+            </div>
+
+            <EscrowIllustration className="lg:justify-self-end" />
           </div>
-
-          <p className="mt-8 max-w-2xl text-secondary text-fg-muted">
-            This runs on {DEFAULT_CHAIN.label}. The tokens involved have no monetary value
-            and are freely available from a faucet. Do not connect a wallet holding real
-            funds.
-          </p>
         </section>
 
         {/* --------------------------------------------------------- how it works */}
-        <section className="border-t border-line">
-          <div className="mx-auto max-w-(--container-app) px-5 py-20 sm:px-8">
-            <h2 className="text-display text-fg">How the escrow works</h2>
+        <section className="border-t border-line bg-subtle">
+          <div className="mx-auto max-w-(--container-app) px-5 py-20 sm:px-8 lg:py-24">
+            <h2 className="max-w-2xl text-display text-fg">How the escrow works</h2>
 
-            <ol className="mt-14 flex flex-col">
+            <ol className="mt-14 grid gap-px overflow-hidden rounded-xl border border-line bg-line md:grid-cols-3">
               {STEPS.map((step, index) => (
-                <li
-                  key={step.title}
-                  className="grid gap-3 border-t border-line py-9 sm:grid-cols-[4rem_minmax(0,1fr)] sm:gap-8"
-                >
-                  <span className="font-mono text-code text-fg-muted tabular-nums">
-                    {String(index + 1).padStart(2, '0')}
+                <li key={step.title} className="flex flex-col bg-canvas p-7">
+                  <span
+                    className="flex size-8 items-center justify-center rounded-full border border-line bg-subtle font-mono text-code tabular-nums text-fg-muted"
+                    aria-hidden
+                  >
+                    {index + 1}
                   </span>
-                  <div className="max-w-2xl">
-                    <h3 className="text-section text-fg">{step.title}</h3>
-                    <p className="mt-2.5 text-body text-fg-secondary">{step.body}</p>
-                  </div>
+                  <h3 className="mt-5 text-section text-fg">{step.title}</h3>
+                  <p className="mt-2.5 text-secondary text-fg-secondary">{step.body}</p>
                 </li>
               ))}
             </ol>
+
+            <p className="mt-8 max-w-2xl text-secondary text-fg-muted">
+              Nothing here is held by OpenForge. The funds sit in a contract that only the
+              two parties can act on, and every one of those actions is a public
+              transaction.
+            </p>
           </div>
         </section>
 
@@ -136,9 +158,26 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-14 grid gap-12 lg:grid-cols-2 lg:gap-16">
-              {HONESTY.map((column) => (
+              {HONESTY.map((column, columnIndex) => (
                 <div key={column.heading}>
-                  <h3 className="text-section text-fg">{column.heading}</h3>
+                  <h3 className="flex items-center gap-2.5 text-section text-fg">
+                    <span
+                      className={cn(
+                        'flex size-6 shrink-0 items-center justify-center rounded-full',
+                        columnIndex === 0
+                          ? 'bg-success-subtle text-success-text'
+                          : 'bg-warning-subtle text-warning-text',
+                      )}
+                      aria-hidden
+                    >
+                      {columnIndex === 0 ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Minus className="size-3.5" />
+                      )}
+                    </span>
+                    {column.heading}
+                  </h3>
                   <ul className="mt-6 flex flex-col">
                     {column.points.map((point) => (
                       <li
