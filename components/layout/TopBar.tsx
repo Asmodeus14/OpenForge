@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Menu, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { WalletStatus } from '@/components/wallet/WalletStatus';
 import { useCommandPalette } from '@/components/navigation/CommandPalette';
@@ -13,18 +14,8 @@ import { Sidebar } from './Sidebar';
 
 function Wordmark() {
   return (
-    <Link
-      href="/overview"
-      className="flex items-center gap-2.5 rounded-md text-fg"
-      aria-label="OpenForge home"
-    >
-      <span
-        className="flex size-6 items-center justify-center rounded-md bg-fg text-[10px] font-bold text-canvas"
-        aria-hidden
-      >
-        OF
-      </span>
-      <span className="text-body font-semibold tracking-tight">OpenForge</span>
+    <Link href="/overview" className="rounded-md" aria-label="OpenForge home">
+      <Logo />
     </Link>
   );
 }

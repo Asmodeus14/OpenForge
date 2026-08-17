@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { buttonClasses } from '@/components/ui/buttonStyles';
+import { Logo } from '@/components/ui/Logo';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { DEFAULT_CHAIN } from '@/chain/config';
 
@@ -12,14 +13,8 @@ import { DEFAULT_CHAIN } from '@/chain/config';
 
 function Wordmark() {
   return (
-    <Link href="/" className="flex items-center gap-2.5 text-fg" aria-label="OpenForge home">
-      <span
-        className="flex size-6 items-center justify-center rounded-md bg-fg text-[10px] font-bold text-canvas"
-        aria-hidden
-      >
-        OF
-      </span>
-      <span className="text-body font-semibold tracking-tight">OpenForge</span>
+    <Link href="/" aria-label="OpenForge home">
+      <Logo />
     </Link>
   );
 }

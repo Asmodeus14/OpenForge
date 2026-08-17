@@ -84,6 +84,23 @@ amounts, IDs. Never for prose, never for decoration.
 `components/ui/Layout.tsx` exists to make the *default* page structure
 whitespace and hairlines, not a grid of boxes.
 
+### The logo
+
+`assets/Logo_sheet.png` is the source of truth. `scripts/build-logo.js`
+derives every asset from it — `public/logo-mark.png` (alpha-only mark),
+`app/icon.png` and `app/apple-icon.png` (white mark on a dark plate). Re-run
+the script if the sheet changes rather than hand-editing the outputs.
+
+`components/ui/Logo.tsx` renders the mark as a **CSS mask over
+`currentColor`**, not as an `<img>`. That is what makes one asset correct in
+both themes. The old committed `openforge.svg` could not do this: its fill was
+hardcoded `#000000`, invisible on a dark background.
+
+The wordmark is set in the product's own typeface rather than baked into the
+image, so it stays crisp, selectable, and identical to the rest of the UI.
+
+### Layout primitives
+
 - `Page` — width and gutters. `content` (45rem) / `app` (70rem) / `wide` (82.5rem).
 - `PageHeader` — title, description, actions. Renders the `<h1>`.
 - `Section` — hairline above, generous vertical rhythm.
