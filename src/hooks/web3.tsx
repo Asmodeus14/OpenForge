@@ -407,9 +407,4 @@ export function useWeb3() {
   return context
 }
 
-// TypeScript declaration for window.ethereum
-declare global {
-  interface Window {
-    ethereum?: any
-  }
-}
+// `Window.ethereum` is declared once, in src/global.d.ts.

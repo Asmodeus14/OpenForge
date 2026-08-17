@@ -112,11 +112,7 @@ const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(
   }
 );
 
-declare global {
-  interface Window {
-    ethereum: any;
-  }
-}
+// `Window.ethereum` is declared once, in src/global.d.ts.
 
 interface MilestoneInput {
   amount: string;

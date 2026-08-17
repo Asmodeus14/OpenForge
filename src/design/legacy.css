@@ -1,0 +1,102 @@
+/* ==========================================================================
+   LEGACY SHIM — TEMPORARY
+
+   These classes exist only to keep not-yet-rebuilt pages rendering while the
+   redesign lands page by page. Every rule here is scheduled for deletion:
+
+     .font-orbitron, .text-gradient-*, .text-neon-*, .char, .line, .floating
+       -> removed with Land.tsx / About.tsx / Contact.tsx  (Phase 9)
+     .animate-float, .animate-fade-in, .shadow-3xl
+       -> removed with Home.tsx / Profile.tsx               (Phase 7)
+     .animate-scaleIn
+       -> removed with Modal.tsx, replaced by <Dialog>      (Phase 4)
+
+   Do NOT use any of these in new code. This file must be empty and deleted
+   by the end of Phase 10.
+   ========================================================================== */
+
+/* Orbitron is no longer loaded — the display face is now Inter. Mapping the
+   class keeps legacy headings on the real type stack instead of dropping
+   them to an unpredictable system fallback. */
+.font-orbitron {
+  font-family: var(--font-sans);
+  letter-spacing: -0.018em;
+}
+
+.text-gradient-primary {
+  background: linear-gradient(135deg, #a99bf5 0%, #6e5ae6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-secondary {
+  background: linear-gradient(135deg, #f5f5f5 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-neon-purple {
+  color: #a99bf5;
+}
+
+.text-neon-cyan {
+  color: #6fabf5;
+}
+
+.shadow-3xl {
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.85);
+}
+
+/* GSAP SplitText targets. GSAP is removed in Phase 10; these keep the
+   split spans from collapsing in the meantime. */
+.char,
+.line {
+  display: inline-block;
+}
+
+@keyframes of-legacy-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes of-legacy-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes of-legacy-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-float,
+.floating {
+  animation: of-legacy-float 6s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: of-legacy-fade-in 240ms var(--ease-out) both;
+}
+
+.animate-scaleIn {
+  animation: of-legacy-scale-in var(--dur-modal) var(--ease-out) both;
+}
