@@ -10,7 +10,13 @@
  * socket, and REST is used only for the initial load and for writes.
  */
 
-import type { ChatMessage, ChatRoom, JoinRequest } from './types';
+import type {
+  ChatMessage,
+  ChatRoom,
+  ChatRoomType,
+  JoinRequest,
+  RoomInvitation,
+} from './types';
 
 /**
  * The base URL, normalised to the server's origin.
@@ -98,19 +104,130 @@ export function verifySignature(walletAddress: string, signature: string) {
 
 /* ------------------------------------------------------------------- rooms */
 
-export function listMyRooms(token: string) {
-  return request<{ rooms: ChatRoom[] }>('/api/rooms/my', { token });
+/**
+ * Rooms this wallet belongs to.
+ *
+ * The server answers with `{ approvedRooms, pendingRooms }`, not `{ rooms }`.
+ * This previously read `data.rooms`, which is always `undefined` — so the room
+ * list rendered empty no matter how many rooms the user was in. Verified
+ * against a running backend.
+ *
+ * Membership status is folded onto each room so callers can tell a room they
+ * are in from one they have merely asked to join.
+ */
+export async function listMyRooms(token: string): Promise<ChatRoom[]> {
+  const data = await request<{
+    approvedRooms?: ChatRoom[];
+    pendingRooms?: ChatRoom[];
+  }>('/api/rooms/my', { token });
+
+  return [
+    ...(data.approvedRooms ?? []).map((room) => ({ ...room, status: 'approved' as const })),
+    ...(data.pendingRooms ?? []).map((room) => ({ ...room, status: 'pending' as const })),
+  ];
 }
 
 export function listPublicRooms(token: string) {
   return request<{ rooms: ChatRoom[] }>('/api/rooms/public', { token });
 }
 
+/**
+ * Creates a room.
+ *
+ * The server requires `roomType`, one of `public | private | p2p`, and rejects
+ * the request outright without it. This previously sent `isPrivate`, so every
+ * attempt to create a room returned 400 — room creation could not work at all.
+ * Verified against a running backend.
+ */
 export function createRoom(
   token: string,
-  input: { name: string; description?: string; isPrivate?: boolean },
+  input: {
+    name: string;
+    description?: string;
+    roomType?: ChatRoomType;
+    /**
+     * Opaque key tying this room to what created it, e.g.
+     * `escrow:0xabc…:dispute`. Lets a room be found again by identity rather
+     * than by matching its display name, which breaks on rename.
+     */
+    context?: string;
+  },
 ) {
-  return request<{ room: ChatRoom }>('/api/rooms', { method: 'POST', token, body: input });
+  return request<{ room: ChatRoom }>('/api/rooms', {
+    method: 'POST',
+    token,
+    body: {
+      name: input.name,
+      description: input.description,
+      roomType: input.roomType ?? 'private',
+      context: input.context,
+    },
+  });
+}
+
+/**
+ * Invites a wallet to a private room.
+ *
+ * An invitation, not an addition — the invitee has to accept. Nobody can be
+ * put into a room without agreeing, which is the correct behaviour even when
+ * the room is created on their behalf.
+ *
+ * Only the room's admin may invite, and only to a `private` room.
+ */
+export function inviteToRoom(token: string, roomId: string, walletAddress: string) {
+  return request<{ invitation: { id: string; status: string } }>(
+    `/api/rooms/${roomId}/invite`,
+    { method: 'POST', token, body: { walletAddress } },
+  );
+}
+
+/* ------------------------------------------------------------ invitations */
+
+/**
+ * Invitations addressed to this wallet.
+ *
+ * Without these three calls an invitation was a dead end: the server recorded
+ * it, and the invited party had no way to see or accept it — so every room
+ * created on someone's behalf had exactly one member, its creator.
+ */
+export async function listInvitations(token: string): Promise<RoomInvitation[]> {
+  const data = await request<{ invitations?: RoomInvitation[] }>('/api/invitations', {
+    token,
+  });
+  return data.invitations ?? [];
+}
+
+export function acceptInvitation(token: string, invitationId: string) {
+  return request<{ success: boolean; roomId?: string }>(
+    `/api/invitations/${invitationId}/accept`,
+    { method: 'POST', token },
+  );
+}
+
+export function rejectInvitation(token: string, invitationId: string) {
+  return request<{ success: boolean }>(`/api/invitations/${invitationId}/reject`, {
+    method: 'POST',
+    token,
+  });
+}
+
+/**
+ * Posts a message over HTTP rather than the socket.
+ *
+ * The socket is the right transport for a live conversation, but a message
+ * written as part of another action — recording a dispute, say — must not
+ * depend on a socket that may not be connected at that moment.
+ */
+export function postMessage(
+  token: string,
+  roomId: string,
+  content: string,
+) {
+  return request<{ message: ChatMessage }>(`/api/rooms/${roomId}/messages`, {
+    method: 'POST',
+    token,
+    body: { content },
+  });
 }
 
 export function joinRoom(token: string, roomId: string) {

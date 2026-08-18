@@ -15,9 +15,11 @@ import {
   TechnicalDetails,
   TokenAmount,
 } from '@/components/trust/Trust';
+import { Person } from '@/components/trust/Identity';
 import { TransactionFlow } from '@/components/trust/TransactionFlow';
 import { MilestoneList } from '@/components/escrow/MilestoneList';
 import { DisputeDialog } from '@/components/escrow/DisputeDialog';
+import { DisputeRoom } from '@/components/escrow/DisputeRoom';
 import {
   cancelMilestoneIntent,
   cancelProjectIntent,
@@ -205,8 +207,11 @@ export function EscrowDetailClient({ address }: { address: string }) {
             title="A dispute is open"
             icon={<ShieldAlert className="size-4 text-danger-text" aria-hidden />}
           >
-            Milestone releases are paused. The funder can end this in their own favour at
-            any time.{' '}
+            {/* Not "paused" — there is no path from Disputed back to Funded.
+                Milestone work is over for good; only the two terminal
+                resolutions remain. */}
+            Milestone releases have ended permanently and the dispute cannot be withdrawn.
+            The funder can end this in their own favour at any time.{' '}
             {disputeCountdown
               ? `The developer can claim the remaining balance in ${disputeCountdown}.`
               : 'The developer can now also claim the remaining balance.'}
@@ -215,6 +220,16 @@ export function EscrowDetailClient({ address }: { address: string }) {
                 Raised {formatDate(detail.disputeRaisedAt)} · developer unlocked{' '}
                 {formatDate(disputeUnlock)}
               </span>
+            )}
+
+            {/* Offered to the two parties only. An observer has nothing to
+                settle and should not be creating rooms about it. */}
+            {role !== 'observer' && (
+              <DisputeRoom
+                escrowAddress={address}
+                counterparty={role === 'funder' ? detail.developer : detail.funder}
+                counterpartyRole={role === 'funder' ? 'developer' : 'funder'}
+              />
             )}
           </Alert>
         )}
@@ -234,7 +249,7 @@ export function EscrowDetailClient({ address }: { address: string }) {
           <div>
             <dt className="text-meta text-fg-muted">Funder</dt>
             <dd className="mt-2 flex flex-wrap items-center gap-2">
-              <AddressDisplay address={detail.funder} chars={6} />
+              <Person address={detail.funder} chars={6} />
               {isAddressEqual(detail.funder, wallet.account) && (
                 <span className="text-micro text-accent-text">You</span>
               )}
@@ -247,7 +262,7 @@ export function EscrowDetailClient({ address }: { address: string }) {
           <div>
             <dt className="text-meta text-fg-muted">Developer</dt>
             <dd className="mt-2 flex flex-wrap items-center gap-2">
-              <AddressDisplay address={detail.developer} chars={6} />
+              <Person address={detail.developer} chars={6} />
               {isAddressEqual(detail.developer, wallet.account) && (
                 <span className="text-micro text-accent-text">You</span>
               )}

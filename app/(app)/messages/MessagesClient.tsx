@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   ChevronLeft,
   Hash,
   Lock,
+  LogOut,
   MessageSquare,
+  MoreHorizontal,
   PenSquare,
   Plus,
+  Trash2,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -19,15 +23,19 @@ import { Dialog, ConfirmDialog } from '@/components/ui/Dialog';
 import { Input, Textarea } from '@/components/ui/Input';
 import { DisclosureNote } from '@/components/trust/Trust';
 import { MessageList } from '@/components/chat/MessageList';
+import { Invitations } from '@/components/chat/Invitations';
+import { RoomLabel, useRoomLabel } from '@/components/chat/RoomLabel';
 import { Composer } from '@/components/chat/Composer';
+import { PersonName } from '@/components/trust/Identity';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
 import { useChatAuth } from '@/hooks/useChatAuth';
+import { CHAT_ROOMS_KEY, useChatRooms } from '@/hooks/useChatRooms';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import * as chat from '@/lib/chat/api';
 import { isAuthError } from '@/lib/chat/api';
+import { PAIR_CONTEXT_PREFIX } from '@/lib/chat/rooms';
 import { cn } from '@/lib/cn';
-import { shortenAddress } from '@/lib/format';
-import type { ChatMessage, ChatRoom } from '@/lib/chat/types';
+import type { ChatMessage, ChatRoom, ChatRoomType } from '@/lib/chat/types';
 
 /**
  * Messages.
@@ -42,35 +50,46 @@ import type { ChatMessage, ChatRoom } from '@/lib/chat/types';
  * The backend allows 100 requests per 15 minutes per IP, which polling would
  * exhaust in minutes.
  */
-export function MessagesClient() {
+export function MessagesClient({
+  initialRoomId = null,
+}: {
+  /** Selects a room on first render, for `/messages?room=<id>` deep links. */
+  initialRoomId?: string | null;
+}) {
   const wallet = useWalletContext();
   const auth = useChatAuth(wallet.account);
   const queryClient = useQueryClient();
 
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(initialRoomId);
   /** Messages that arrived on the socket since this room's history loaded. */
   const [live, setLive] = useState<ChatMessage[]>([]);
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const [typing, setTyping] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ChatMessage | null>(null);
+  const [pendingRoomAction, setPendingRoomAction] = useState<{
+    kind: 'leave' | 'delete';
+    room: ChatRoom;
+  } | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
 
   const token = auth.token;
 
   /* -------------------------------------------------------------- rooms */
 
-  const rooms = useQuery({
-    queryKey: ['chat-rooms', token],
-    enabled: Boolean(token),
-    staleTime: 60_000,
-    queryFn: () => chat.listMyRooms(token!).then((data) => data.rooms ?? []),
-  });
+  // `listMyRooms` normalises the server's `{ approvedRooms, pendingRooms }`
+  // into a single list. Reading `.rooms` returned undefined every time, which
+  // is why this list was always empty.
+  const rooms = useChatRooms(token);
 
   const activeRoom = useMemo(
     () => rooms.data?.find((room) => room.id === roomId) ?? null,
     [rooms.data, roomId],
   );
+
+  // A conversation between two wallets is named after the other person rather
+  // than after whatever its creator typed — see `useRoomLabel`.
+  const activeRoomLabel = useRoomLabel(activeRoom, wallet.account);
 
   /* ------------------------------------------------------------ history */
 
@@ -96,11 +115,20 @@ export function MessagesClient() {
   // The transcript is derived, not copied: history owns the past, the socket
   // buffer owns everything since. Copying history into state would mean an
   // edit had to be written to two places and could disagree with itself.
+  //
+  // The id set is memoised separately from the concatenation. Both used to be
+  // rebuilt on every socket message, which walks the whole history to answer a
+  // question only about the new arrival — O(history) per message received, on
+  // a list that only grows.
+  const historyIds = useMemo(
+    () => new Set((history.data ?? []).map((message) => message.id)),
+    [history.data],
+  );
+
   const messages = useMemo(() => {
     const past = history.data ?? [];
-    const seen = new Set(past.map((message) => message.id));
-    return [...past, ...live.filter((message) => !seen.has(message.id))];
-  }, [history.data, live]);
+    return [...past, ...live.filter((message) => !historyIds.has(message.id))];
+  }, [history.data, historyIds, live]);
 
   /* ------------------------------------------------------------- socket */
 
@@ -265,10 +293,16 @@ export function MessagesClient() {
         <nav
           aria-label="Rooms"
           className={cn(
-            'min-h-0 overflow-y-auto py-4 md:border-r md:border-line md:pr-4',
+            'min-h-0 overflow-y-auto md:border-r md:border-line',
             roomId && 'hidden md:block',
           )}
         >
+          {/* Above the room list, because an unanswered invitation is the one
+              thing here that is waiting on the user. Renders nothing when
+              there are none. */}
+          <Invitations token={token} />
+
+          <div className="py-4 md:pr-4">
           {rooms.isPending ? (
             <div className="flex flex-col gap-2">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -307,7 +341,9 @@ export function MessagesClient() {
                     ) : (
                       <Hash className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
                     )}
-                    <span className="min-w-0 flex-1 truncate">{room.name}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      <RoomLabel room={room} me={wallet.account} />
+                    </span>
                     {room.status === 'pending' && (
                       <span className="shrink-0 text-micro text-warning-text">Pending</span>
                     )}
@@ -316,6 +352,7 @@ export function MessagesClient() {
               ))}
             </ul>
           )}
+          </div>
         </nav>
 
         {/* ------------------------------------------------------ transcript */}
@@ -341,7 +378,7 @@ export function MessagesClient() {
                   />
                   <div className="min-w-0">
                   <h2 className="truncate text-body font-medium text-fg">
-                    {activeRoom.name}
+                    {activeRoomLabel}
                   </h2>
                   {activeRoom.description && (
                     <p className="mt-0.5 truncate text-meta text-fg-muted">
@@ -351,6 +388,11 @@ export function MessagesClient() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-meta text-fg-muted">
+                  <RoomMenu
+                    isAdmin={Boolean(activeRoom.is_admin)}
+                    onLeave={() => setPendingRoomAction({ kind: 'leave', room: activeRoom })}
+                    onDelete={() => setPendingRoomAction({ kind: 'delete', room: activeRoom })}
+                  />
                   {activeRoom.member_count !== undefined && (
                     <span className="inline-flex items-center gap-1.5">
                       <Users className="size-3.5" aria-hidden />
@@ -407,6 +449,12 @@ export function MessagesClient() {
                       })
                     }
                     onDelete={setPendingDelete}
+                    onApprove={async (content) => {
+                      // Posted over HTTP rather than the socket: a signed
+                      // approval must not be lost because a socket happened
+                      // to be reconnecting at that moment.
+                      await chat.postMessage(token, activeRoom.id, content);
+                    }}
                   />
                 )}
               </div>
@@ -423,7 +471,12 @@ export function MessagesClient() {
 
               {typing.length > 0 && (
                 <p aria-live="polite" className="px-4 pb-1 text-micro text-fg-muted">
-                  {typing.map((address) => shortenAddress(address, 4)).join(', ')}{' '}
+                  {typing.map((address, index) => (
+                    <span key={address}>
+                      {index > 0 && ', '}
+                      <PersonName address={address} />
+                    </span>
+                  ))}{' '}
                   {typing.length === 1 ? 'is' : 'are'} typing…
                 </p>
               )}
@@ -432,7 +485,7 @@ export function MessagesClient() {
                 disabled={socket.status !== 'connected'}
                 placeholder={
                   socket.status === 'connected'
-                    ? `Message ${activeRoom.name}`
+                    ? `Message ${activeRoomLabel}`
                     : 'Reconnecting to the messaging server…'
                 }
                 onSend={(content) => socket.sendMessage(activeRoom.id, content)}
@@ -457,6 +510,51 @@ export function MessagesClient() {
         }
       />
 
+      {/* Two different actions, deliberately not merged. Leaving affects only
+          you; deleting takes the conversation away from everyone in it. The
+          copy for each says exactly which one is happening. */}
+      <ConfirmDialog
+        open={pendingRoomAction?.kind === 'leave'}
+        onOpenChange={(open) => !open && setPendingRoomAction(null)}
+        title="Leave this conversation?"
+        description="It disappears from your list and you stop receiving messages from it. The messages themselves stay for everyone else. You will not be able to read it again unless someone invites you back."
+        confirmLabel="Leave"
+        destructive
+        onConfirm={() => {
+          const target = pendingRoomAction?.room;
+          setPendingRoomAction(null);
+          if (!target) return;
+          void withErrors(async () => {
+            await chat.leaveRoom(token, target.id);
+            if (roomId === target.id) setRoomId(null);
+            await queryClient.invalidateQueries({ queryKey: [CHAT_ROOMS_KEY] });
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingRoomAction?.kind === 'delete'}
+        onOpenChange={(open) => !open && setPendingRoomAction(null)}
+        title="Delete this room?"
+        description={
+          pendingRoomAction?.room.context?.startsWith(PAIR_CONTEXT_PREFIX)
+            ? 'The room disappears for everyone in it, including the escrow terms proposed and signed here — that record is how each of you can show what was agreed. Any escrow contract is unaffected; it lives on chain. The messages are not erased from the server, but nobody can reach them again.'
+            : 'The room disappears for everyone in it. The messages are not erased from the server, but nobody can reach them again.'
+        }
+        confirmLabel="Delete room"
+        destructive
+        onConfirm={() => {
+          const target = pendingRoomAction?.room;
+          setPendingRoomAction(null);
+          if (!target) return;
+          void withErrors(async () => {
+            await chat.deleteRoom(token, target.id);
+            if (roomId === target.id) setRoomId(null);
+            await queryClient.invalidateQueries({ queryKey: [CHAT_ROOMS_KEY] });
+          });
+        }}
+      />
+
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
@@ -478,6 +576,59 @@ export function MessagesClient() {
   );
 }
 
+/**
+ * Room-level actions.
+ *
+ * Deleting is offered only to the room's admin, because the server refuses it
+ * for anyone else — an action that always returns 403 is worse than no action.
+ * Everyone else gets the one they can actually take.
+ */
+function RoomMenu({
+  isAdmin,
+  onLeave,
+  onDelete,
+}: {
+  isAdmin: boolean;
+  onLeave: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <IconButton
+          label="Room actions"
+          size="sm"
+          icon={<MoreHorizontal className="size-4" aria-hidden />}
+        />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          className="z-[var(--z-overlay)] min-w-44 rounded-lg border border-line bg-elevated p-1.5 shadow-[var(--shadow-lg)]"
+        >
+          <DropdownMenu.Item
+            onSelect={onLeave}
+            className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-secondary text-fg-secondary outline-none data-[highlighted]:bg-subtle data-[highlighted]:text-fg"
+          >
+            <LogOut className="size-3.5" aria-hidden />
+            Leave conversation
+          </DropdownMenu.Item>
+          {isAdmin && (
+            <DropdownMenu.Item
+              onSelect={onDelete}
+              className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-secondary text-danger-text outline-none data-[highlighted]:bg-danger-subtle"
+            >
+              <Trash2 className="size-3.5" aria-hidden />
+              Delete room
+            </DropdownMenu.Item>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 function CreateRoomDialog({
   open,
   onOpenChange,
@@ -485,7 +636,7 @@ function CreateRoomDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (input: { name: string; description?: string; isPrivate: boolean }) => void;
+  onCreate: (input: { name: string; description?: string; roomType: ChatRoomType }) => void;
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -509,7 +660,8 @@ function CreateRoomDialog({
               onCreate({
                 name: name.trim(),
                 description: description.trim() || undefined,
-                isPrivate,
+                // The server's own vocabulary — it rejects anything else.
+                roomType: isPrivate ? 'private' : 'public',
               })
             }
           >

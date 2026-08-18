@@ -5,7 +5,8 @@ import { Page, PageHeader, Section, Stat } from '@/components/ui/Layout';
 import { EmptyState } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/Badge';
 import { buttonClasses } from '@/components/ui/buttonStyles';
-import { AddressDisplay, DisclosureNote, TokenAmount } from '@/components/trust/Trust';
+import { DisclosureNote, TokenAmount } from '@/components/trust/Trust';
+import { Person } from '@/components/trust/Identity';
 import {
   FundingProgress,
   FundingProgressLegend,
@@ -124,11 +125,11 @@ export default async function FundingPage() {
                       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
                         <span className="inline-flex items-center gap-2 text-meta text-fg-muted">
                           Funded by
-                          <AddressDisplay address={listing.funder} showExplorer={false} />
+                          <Person address={listing.funder} showExplorer={false} />
                         </span>
                         <span className="inline-flex items-center gap-2 text-meta text-fg-muted">
                           Built by
-                          <AddressDisplay address={listing.developer} showExplorer={false} />
+                          <Person address={listing.developer} showExplorer={false} />
                         </span>
                         <span className="text-meta text-fg-muted">
                           {formatDate(listing.createdAt) ?? ''}

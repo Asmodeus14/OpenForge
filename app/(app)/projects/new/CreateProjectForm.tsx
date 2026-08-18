@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { ImagePlus, Wallet, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +13,7 @@ import { DisclosureNote } from '@/components/trust/Trust';
 import { TransactionFlow } from '@/components/trust/TransactionFlow';
 import { TagInput } from '@/components/ui/TagInput';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
+import { queryKeys } from '@/hooks/queries';
 import { useTransaction } from '@/hooks/useTransaction';
 import { uploadFileToIpfs, uploadJsonToIpfs } from '@/lib/ipfs-upload';
 import {
@@ -36,6 +38,7 @@ import { DEFAULT_CHAIN } from '@/chain/config';
 export function CreateProjectForm() {
   const router = useRouter();
   const wallet = useWalletContext();
+  const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -47,7 +50,13 @@ export function CreateProjectForm() {
 
   const tx = useTransaction({
     onSuccess: () => {
-      // Discover is cached on the server; refresh so the new project appears.
+      // Two separate caches hold a copy of this. Discover is rendered on the
+      // server, so it needs `router.refresh()`; the projects list is a client
+      // query, and without invalidating it the project just created is absent
+      // from the page this navigates to.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projectsByBuilder(wallet.account),
+      });
       router.refresh();
       router.push('/projects');
     },

@@ -20,9 +20,18 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Chain reads are idempotent; refetching on every focus causes
-            // visible flicker and pointless RPC load.
-            refetchOnWindowFocus: false,
+            // Returning to the tab refetches anything past the stale window.
+            //
+            // This was off, on the theory that it caused flicker. It does not:
+            // react-query keeps the previous data on screen while refetching,
+            // so the only visible change is a value updating. What it did
+            // cause was a product where the counterparty released a milestone
+            // and you had to reload the page to find out.
+            refetchOnWindowFocus: true,
+            // Same argument, for a connection that dropped and came back.
+            refetchOnReconnect: true,
+            // Under this, a focus event counts as continuous use rather than
+            // as a return, so alt-tabbing does not hammer the RPC.
             staleTime: 30_000,
             retry: 1,
             retryDelay: 800,

@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
+import { useState } from 'react';
 import { ChevronDown, LogOut, TriangleAlert, User, Wallet } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +11,7 @@ import { AddressDisplay } from '@/components/trust/Trust';
 import { DEFAULT_CHAIN } from '@/chain/config';
 import { useProfile } from '@/hooks/queries';
 import { shortenAddress } from '@/lib/format';
+import { WalletAssets } from './WalletAssets';
 import { useWalletContext } from './WalletProvider';
 
 /**
@@ -23,6 +25,8 @@ import { useWalletContext } from './WalletProvider';
 export function WalletStatus() {
   const wallet = useWalletContext();
   const { data: profile } = useProfile(wallet.account);
+  // Balance reads are deferred until the menu is opened — see WalletAssets.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (!wallet.installed) {
     return (
@@ -70,7 +74,7 @@ export function WalletStatus() {
   const name = profile?.metadata.name;
 
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
@@ -92,7 +96,7 @@ export function WalletStatus() {
           align="end"
           sideOffset={8}
           className={cn(
-            'z-[var(--z-overlay)] min-w-64 rounded-lg border border-line bg-elevated p-1.5',
+            'z-[var(--z-overlay)] w-80 max-w-[calc(100vw-1.5rem)] rounded-lg border border-line bg-elevated p-1.5',
             'shadow-[var(--shadow-lg)]',
             'data-[state=open]:animate-[of-drop-in_var(--dur-fast)_var(--ease-out)]',
           )}
@@ -106,6 +110,12 @@ export function WalletStatus() {
             <p className="mt-2.5 text-meta text-fg-muted">
               {DEFAULT_CHAIN.label} — test funds only
             </p>
+          </div>
+
+          <DropdownMenu.Separator className="my-1.5 h-px bg-line" />
+
+          <div className="px-2.5 py-2">
+            <WalletAssets address={wallet.account} enabled={menuOpen} />
           </div>
 
           <DropdownMenu.Separator className="my-1.5 h-px bg-line" />

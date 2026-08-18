@@ -6,6 +6,12 @@ export const metadata: Metadata = {
   description: 'Rooms you belong to on the OpenForge chat server.',
 };
 
-export default function MessagesPage() {
-  return <MessagesClient />;
+interface Props {
+  /** `?room=<id>` — a deep link from a dispute, so the room opens directly. */
+  searchParams: Promise<{ room?: string }>;
+}
+
+export default async function MessagesPage({ searchParams }: Props) {
+  const { room } = await searchParams;
+  return <MessagesClient initialRoomId={room ?? null} />;
 }

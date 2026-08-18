@@ -20,16 +20,27 @@ export interface ChatUser {
   id: number;
 }
 
+/** The server's own vocabulary. It rejects anything outside this set. */
+export type ChatRoomType = 'public' | 'private' | 'p2p';
+
 export interface ChatRoom {
   id: string;
   name: string;
   description?: string | null;
+  room_type?: ChatRoomType;
+  /** Opaque key set at creation, e.g. `escrow:0xabc…:dispute`. */
+  context?: string | null;
   is_private?: boolean;
   created_by?: number;
   created_at?: string;
   member_count?: number;
   /** Present on `/my`: this user's membership state in the room. */
   status?: 'approved' | 'pending' | 'rejected';
+  /**
+   * Present on `/my`, from `room_members`. Only an admin may delete the room
+   * or invite to it; everyone else can only leave.
+   */
+  is_admin?: boolean;
   role?: 'admin' | 'member';
 }
 
@@ -46,6 +57,17 @@ export interface ChatMessage {
   /** Only populated on socket events — see the note above. */
   like_count?: number;
   liked_by?: string[];
+}
+
+/** An invitation to a private room, addressed to a wallet address. */
+export interface RoomInvitation {
+  id: string;
+  room_id: string;
+  room_name?: string;
+  inviter_wallet?: string;
+  invitee_wallet_address: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
 }
 
 export interface JoinRequest {

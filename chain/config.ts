@@ -16,6 +16,12 @@ export interface TokenInfo {
   symbol: string;
   name: string;
   decimals: number;
+  /**
+   * Where this token comes from. Shown in the picker because a symbol is not
+   * unique — two different contracts below both call themselves "USDC" — and
+   * picking the wrong one means approving the wrong asset.
+   */
+  note?: string;
 }
 
 export interface ChainInfo {
@@ -43,19 +49,56 @@ export const CHAINS: Record<number, ChainInfo> = {
     nativeSymbol: 'SepoliaETH',
     explorer: 'https://sepolia.etherscan.io',
     testnet: true,
+    // Every entry was read from Sepolia before being listed here: symbol,
+    // name and decimals below are what the contract itself reports.
+    //
+    // The previous token list shipped mainnet USDT/USDC/DAI/WBTC, which do not
+    // exist on this chain, and labelled 0x779877A7… "Sepolia USDC" with 6
+    // decimals. That address is Chainlink LINK, and it has 18. Approving it
+    // would have moved the wrong asset in amounts wrong by a factor of 10^12.
+    // It appears below under its real name, which is the only safe way to list
+    // a token: verified, or not at all.
+    //
+    // This list is a convenience, not a whitelist. Any ERC20 may be used via
+    // the custom-address field, which probes the contract for its real
+    // decimals and refuses tokens that will not report them.
     tokens: [
       {
-        // The project's own test token — the only ERC20 the deployer holds a
-        // balance of, and the one the escrow was actually exercised against.
-        //
-        // The previous token list shipped mainnet USDT/USDC/DAI/WBTC (which
-        // do not exist here) and labelled 0x779877A7… "Sepolia USDC" — that
-        // address is Chainlink LINK. Approving it would have moved the wrong
-        // asset. Both problems are removed by listing only what is real.
+        // The project's own test token, and the one the escrow was actually
+        // exercised against. First in the list, so it is the default.
         address: '0xbe82627f5d7ba5774df41dacdb2415b66ab2b780',
         symbol: 'tUSDC',
         name: 'Test USD Coin',
         decimals: 6,
+        note: "OpenForge's own test token",
+      },
+      {
+        address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        symbol: 'USDC',
+        name: 'USDC',
+        decimals: 6,
+        note: "Circle's official Sepolia test token",
+      },
+      {
+        address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
+        symbol: 'WETH',
+        name: 'Wrapped Ether',
+        decimals: 18,
+        note: 'The canonical Sepolia WETH',
+      },
+      {
+        address: '0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357',
+        symbol: 'DAI',
+        name: 'DAI',
+        decimals: 18,
+        note: "Aave's Sepolia faucet token",
+      },
+      {
+        address: '0x779877A7B0D9E8603169DdbD7836e478b4624789',
+        symbol: 'LINK',
+        name: 'ChainLink Token',
+        decimals: 18,
+        note: 'Chainlink LINK — 18 decimals, not a dollar stablecoin',
       },
     ],
     contracts: {

@@ -151,6 +151,23 @@ export function parseError(error: unknown, context?: string): ParsedError {
   const lower = raw.toLowerCase();
   const title = context ?? 'Something went wrong';
 
+  // --- A token that will not identify itself.
+  //
+  //     Matched by name rather than by importing the class, so this module
+  //     stays free of any dependency on `chain/`. Handled before everything
+  //     below because no transaction is involved: the generic copy would
+  //     invite the user to go looking for one on a block explorer.
+  if ((error as { name?: string })?.name === 'UnreadableTokenError') {
+    return {
+      kind: 'not-sent',
+      title: 'That token cannot be used',
+      message:
+        'This address did not return the number of decimals it uses, so amounts for it cannot be shown or sent accurately. It may not be an ERC20 token. Nothing was sent.',
+      retryable: false,
+      raw,
+    };
+  }
+
   // --- User declined in the wallet.
   if (
     code === 4001 ||

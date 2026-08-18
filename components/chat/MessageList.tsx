@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative, isAddressEqual, shortenAddress } from '@/lib/format';
+import { useDisplayName } from '@/components/trust/Identity';
+import { decodePayload, PROPOSAL_MARKER } from '@/chain/approval';
+import { ProposalCard, type ProposalDisplay } from '@/components/escrow/ProposalCard';
 import type { ChatMessage } from '@/lib/chat/types';
 
 /**
@@ -15,9 +18,40 @@ import type { ChatMessage } from '@/lib/chat/types';
  * Consecutive messages from the same wallet within a few minutes are grouped
  * under one header, so a conversation reads as a conversation rather than as
  * a list of records each restating who is speaking.
+ *
+ * Senders are named, not addressed. A profile name is self-asserted, so the
+ * wallet it belongs to stays beside it — the name is who they say they are,
+ * the address is the part that is checkable.
  */
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Resolution happens in these leaves rather than in the list, because hooks
+ * cannot be called in a loop over a list whose length changes. react-query
+ * dedupes by address, so forty messages from two people cost two lookups.
+ */
+function SenderAvatar({ address }: { address: string }) {
+  const { name, avatarUrl } = useDisplayName(address);
+  return <Avatar src={avatarUrl} name={name ?? undefined} address={address} size="sm" />;
+}
+
+function SenderName({ address }: { address: string }) {
+  const { name } = useDisplayName(address);
+
+  if (!name) {
+    return <span className="font-mono text-code text-fg">{shortenAddress(address, 4)}</span>;
+  }
+
+  return (
+    <>
+      <span className="text-secondary font-medium text-fg">{name}</span>
+      <span className="font-mono text-micro text-fg-muted" title={address}>
+        {shortenAddress(address, 4)}
+      </span>
+    </>
+  );
+}
 
 function shouldGroup(message: ChatMessage, previous: ChatMessage | undefined): boolean {
   if (!previous) return false;
@@ -31,15 +65,52 @@ export function MessageList({
   account,
   onEdit,
   onDelete,
+  onApprove,
 }: {
   messages: ChatMessage[];
   account: string | null;
   onEdit: (message: ChatMessage, content: string) => void;
   onDelete: (message: ChatMessage) => void;
+  /** Posts a signed approval back into the room. */
+  onApprove: (content: string) => Promise<void>;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+
+  // Decoded once per transcript change rather than once per message per
+  // render. A typing indicator or a draft keystroke re-renders this component,
+  // and without this every message's content is re-scanned by regex each time.
+  const payloads = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof decodePayload>>();
+    for (const message of messages) {
+      // Only text that could plausibly carry a payload is parsed at all.
+      map.set(
+        message.id,
+        message.content.includes('openforge:escrow-')
+          ? decodePayload(message.content)
+          : null,
+      );
+    }
+    return map;
+  }, [messages]);
+
+  // Token symbol, precision and title live on the proposal message only — an
+  // approval covers the terms and nothing else, because that is exactly what
+  // the signature covers. Rendering an approval's amounts therefore means
+  // recovering the proposal it answers, matched on the terms themselves.
+  const displayByTerms = useMemo(() => {
+    const map = new Map<string, ProposalDisplay>();
+    for (const payload of payloads.values()) {
+      if (payload?.kind !== PROPOSAL_MARKER) continue;
+      map.set(JSON.stringify(payload.terms), {
+        tokenSymbol: payload.tokenSymbol,
+        tokenDecimals: payload.tokenDecimals,
+        title: payload.title,
+      });
+    }
+    return map;
+  }, [payloads]);
 
   // Scrolling to the newest message is a DOM side effect of new data
   // arriving, which is exactly what an effect is for.
@@ -64,17 +135,13 @@ export function MessageList({
             )}
           >
             <div className="w-8 shrink-0 pt-0.5">
-              {!grouped && (
-                <Avatar address={message.sender_wallet} size="sm" />
-              )}
+              {!grouped && <SenderAvatar address={message.sender_wallet} />}
             </div>
 
             <div className="min-w-0 flex-1">
               {!grouped && (
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-mono text-code text-fg">
-                    {shortenAddress(message.sender_wallet, 4)}
-                  </span>
+                  <SenderName address={message.sender_wallet} />
                   {mine && <span className="text-micro text-accent-text">You</span>}
                   <time
                     dateTime={message.created_at}
@@ -119,6 +186,19 @@ export function MessageList({
                     onClick={() => setEditingId(null)}
                   />
                 </div>
+              ) : payloads.get(message.id) ? (
+                // A structured escrow proposal or approval. The raw text is
+                // still what the server stores, so a client that does not
+                // understand it degrades to showing the block verbatim rather
+                // than losing the message.
+                <ProposalCard
+                  payload={payloads.get(message.id)!}
+                  account={account}
+                  display={displayByTerms.get(
+                    JSON.stringify(payloads.get(message.id)!.terms),
+                  )}
+                  onApprove={(content) => onApprove(content)}
+                />
               ) : (
                 <p className="whitespace-pre-wrap break-words text-body text-fg-secondary">
                   {message.content}

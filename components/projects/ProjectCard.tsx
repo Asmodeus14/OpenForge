@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Layout';
 import { StatusPill } from '@/components/ui/Badge';
-import { AddressDisplay } from '@/components/trust/Trust';
+import { Person } from '@/components/trust/Identity';
 import { projectStatus, type ProjectStatus } from '@/lib/status';
 import { formatDate, truncate } from '@/lib/format';
 import { ipfsUrl } from '@/lib/ipfs';
@@ -74,7 +74,7 @@ export function ProjectCard({ project }: { project: ProjectCardData }) {
           )}
 
           <div className="flex items-center justify-between gap-3 border-t border-line-faint pt-3">
-            <AddressDisplay address={project.builder} showExplorer={false} showCopy={false} />
+            <Person address={project.builder} showExplorer={false} showCopy={false} />
             <span className="shrink-0 text-micro text-fg-muted">
               {created ?? `#${project.projectId}`}
             </span>

@@ -16,6 +16,8 @@ All addresses are on **Sepolia (chain 11155111)** and are defined once, in
 | `TestUSDC` (6 decimals) | `0xbe82627f5d7ba5774df41dacdb2415b66ab2b780` |
 | Fee recipient (EOA) | `0xC869d7a99fa831b4B3bEe7e245F0C9348C2209a3` |
 
+`TestUSDC` is the default currency, not the only one — see [Tokens](#tokens).
+
 `SimpleMilestoneEscrow` has no fixed address — one is deployed per project
 from bytecode embedded in `chain/abi/escrow.ts`.
 
@@ -167,15 +169,80 @@ the deploy flow rather than an optional extra.
 
 ---
 
+## A dispute cannot be withdrawn
+
+There is no `withdrawDispute`, and no path from `Disputed` back to `Funded`.
+Every transition involving a dispute:
+
+| From | Call | To | Effect |
+|---|---|---|---|
+| `Funded` | `raiseDispute` (either party) | `Disputed` | — |
+| `Disputed` | `resolveDisputeToFunder` (funder, **immediately**) | `Cancelled` | All remaining goes to the funder |
+| `Disputed` | `resolveDisputeToDeveloper` (developer, **after 30 days**) | `Completed` | All remaining goes to the developer |
+
+Both exits are terminal. `releaseMilestone`, `cancelMilestone` and
+`cancelProject` are all `inState(Funded)`, so once a dispute is open **no
+further milestone can ever be released and no milestone can be cancelled
+individually**. The escrow can now only end all-or-nothing.
+
+This makes raising a dispute far more consequential than it sounds. The UI
+previously described it as pausing releases — it does not pause anything, it
+ends milestone work permanently. Both the dispute dialog and the escrow's
+disputed banner now say so before the transaction is signed.
+
+---
+
 ## Tokens
 
-Only `TestUSDC` is listed, at **6 decimals**.
+The escrow takes the token address as a constructor argument and assumes
+nothing about it, so **any ERC20 may be used**. `chain/config.ts` lists five as
+a convenience; `TokenSelect`'s custom-address field covers the rest.
 
-The previous token picker offered mainnet USDT, USDC, DAI and WBTC — none of
-which exist on Sepolia — and labelled `0x779877A7…` as "Sepolia USDC". That
-address is **Chainlink LINK**. Approving it would have moved the wrong asset
-entirely.
+| Symbol | Address | Decimals | Source |
+|---|---|---|---|
+| `tUSDC` | `0xbe82627f…b2b780` | 6 | OpenForge's own test token |
+| `USDC` | `0x1c7D4B19…9C7238` | 6 | Circle's official Sepolia token |
+| `WETH` | `0xfFf99767…4d6B14` | 18 | Canonical Sepolia WETH |
+| `DAI` | `0xFF34B3d4…b8a357` | 18 | Aave's Sepolia faucet |
+| `LINK` | `0x779877A7…624789` | 18 | Chainlink |
 
-`chain/erc20.ts` never guesses `decimals`. A token that will not report it
-throws `UnreadableTokenError` rather than defaulting to 18, because getting
-this wrong misstates every amount by a factor of 10¹².
+Every row above was read from Sepolia before being listed: the symbol, name
+and decimals are what each contract reports about itself.
+
+That verification is the whole point. The previous token picker offered
+mainnet USDT, USDC, DAI and WBTC — none of which exist on Sepolia — and
+labelled `0x779877A7…` "Sepolia USDC" **at 6 decimals**. That address is
+Chainlink LINK and it has **18**. Approving it would have moved the wrong
+asset, in an amount wrong by a factor of 10¹².
+
+Note that two listed tokens both report the symbol `USDC`, which is why the
+picker shows provenance rather than symbols alone.
+
+### Why a wider list is not a wider risk
+
+Safety here does not come from restricting the list — it comes from never
+guessing `decimals`. `chain/erc20.ts` short-circuits to the table above for
+known addresses and probes anything else; a token that will not report its
+decimals throws `UnreadableTokenError` and cannot be selected. Verified
+against Sepolia: an unlisted ERC20 resolves, while a plain wallet address, a
+non-ERC20 contract and the zero address are all refused.
+
+### The one hazard a picker cannot remove
+
+`fund()` transfers `totalAmount` and moves straight to `Funded` without
+checking what actually arrived:
+
+```solidity
+paymentToken.safeTransferFrom(msg.sender, address(this), totalAmount);
+state = ProjectState.Funded;
+```
+
+So a **fee-on-transfer or rebasing token** leaves the contract holding less
+than the milestones add up to. Releases pay out per-milestone amounts, so the
+shortfall surfaces on the final release, which reverts.
+
+The funds are not lost: `cancelProject()` and `resolveDisputeToFunder()` both
+refund `_getRemainingBalance()`, which reads the real `balanceOf`, so the
+funder can always recover what is genuinely there. The developer is the party
+who loses the last milestone. `TokenSelect` states this in full before an
+unlisted token can be used, and none of the listed tokens behave this way.

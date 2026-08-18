@@ -161,7 +161,13 @@ export default async function ProjectPage({ params }: Props) {
           between a funder and a developer.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/escrow/new" className={buttonClasses({ variant: 'primary' })}>
+          {/* Carries the id so the escrow form can pre-fill the builder's
+              address from the registry and then say, on screen, whether the
+              address in the field is still that builder. */}
+          <Link
+            href={`/escrow/new?project=${project.projectId}`}
+            className={buttonClasses({ variant: 'primary' })}
+          >
             Fund this work through an escrow
           </Link>
           <Link href="/funding" className={buttonClasses()}>

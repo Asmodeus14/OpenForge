@@ -7,7 +7,8 @@ import { buttonClasses } from '@/components/ui/buttonStyles';
 import { Page, PageHeader } from '@/components/ui/Layout';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { Table } from '@/components/ui/Table';
-import { AddressDisplay, DisclosureNote } from '@/components/trust/Trust';
+import { DisclosureNote } from '@/components/trust/Trust';
+import { Person } from '@/components/trust/Identity';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
 import { useEscrowProjects } from '@/hooks/queries';
 import { formatDate, isAddressEqual } from '@/lib/format';
@@ -133,7 +134,7 @@ export function EscrowListClient() {
                   header: 'Counterparty',
                   hideOnMobile: true,
                   render: (project) => (
-                    <AddressDisplay
+                    <Person
                       address={
                         isAddressEqual(project.funder, wallet.account)
                           ? project.developer

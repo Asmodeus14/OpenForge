@@ -25,6 +25,7 @@ components/
 chain/                  Contract access. Typed wrappers, no React.
   config.ts             Networks, tokens, addresses, protocol constants.
   clients.ts            Browser provider, signer, and a read-only provider.
+  identity.ts           Node-level facts about an address: bytecode, nonce.
   abi/                  ABIs and the escrow bytecode.
 
 lib/                    Pure helpers. format, status, errors, ipfs, project,
@@ -46,6 +47,10 @@ buys something real.
   and there is no client-side RPC waterfall.
 - `/profile/[address]` — a link people share, so it must work without
   JavaScript and produce a correct status code.
+- `/escrow/new` — reads `?project=<id>` from the registry before rendering, so
+  the developer's address is already in the field on first paint. Resolving it
+  on the client would mean showing an empty payment field first, which is
+  exactly the moment someone fills one in from memory.
 - `app/api/ipfs` — because it holds credentials.
 
 **Client Components**, marked `'use client'`, are the pieces that genuinely

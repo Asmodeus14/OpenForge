@@ -5,8 +5,10 @@ import {
   useId,
   type InputHTMLAttributes,
   type ReactNode,
+  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const FIELD = cn(
@@ -129,6 +131,64 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {trailingSlot && (
           <span className="absolute right-2 flex items-center">{trailingSlot}</span>
         )}
+      </div>
+    </Field>
+  );
+});
+
+export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+  containerClassName?: string;
+}
+
+/**
+ * A native `<select>`.
+ *
+ * Deliberately not a custom listbox. For a short, flat set of options the
+ * platform control is already keyboard-accessible, screen-reader correct, and
+ * renders as the OS picker on a phone — all things a hand-rolled dropdown has
+ * to re-earn and usually does not. Radix is reserved for menus that need
+ * things `<select>` genuinely cannot do.
+ */
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { label, hint, error, className, containerClassName, id: providedId, required, children, ...props },
+  ref,
+) {
+  const generated = useId();
+  const id = providedId ?? generated;
+
+  return (
+    <Field
+      id={id}
+      label={label}
+      hint={hint}
+      error={error}
+      required={required}
+      className={containerClassName}
+    >
+      <div className="relative flex items-center">
+        <select
+          ref={ref}
+          id={id}
+          required={required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+          className={cn(
+            FIELD,
+            'h-10 appearance-none pl-3 pr-9 text-body',
+            error && 'border-danger-line focus:border-danger focus:ring-danger-subtle',
+            className,
+          )}
+          {...props}
+        >
+          {children}
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-3 size-4 text-fg-muted"
+          aria-hidden
+        />
       </div>
     </Field>
   );
