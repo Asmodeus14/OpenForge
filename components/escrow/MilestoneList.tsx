@@ -4,10 +4,9 @@ import { CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/Badge';
 import { TokenAmount } from '@/components/trust/Trust';
-import { calculateFee, calculateNetAmount } from '@/chain/config';
 import { formatDate, formatCountdown, formatTokenAmount } from '@/lib/format';
-import { milestoneStatus } from '@/lib/status';
-import { canCancelMilestone, type EscrowDetail, type Milestone } from '@/chain/escrow';
+import { milestoneStatus, OnChainMilestoneStatus } from '@/lib/status';
+import { isReclaimable, isReleasable, type EscrowDetail, type Milestone } from '@/chain/escrow';
 import { cn } from '@/lib/cn';
 
 /**
@@ -17,23 +16,20 @@ import { cn } from '@/lib/cn';
  * line item in a payment schedule, and reading it as one makes the schedule
  * comprehensible at a glance.
  *
- * Descriptions come from `escrow.getMilestones()`. The registry's
- * `getEscrowInfo()` appends " (Deadline: N days)" to every description, so
- * reading from there would show the deadline twice, once inside the title.
+ * Descriptions are no longer on chain — they live in the project's IPFS
+ * metadata and arrive here as `names`. Storing them cost a full storage slot
+ * each and made fixing a typo a transaction. A missing name is not an error;
+ * the row falls back to its number.
  *
- * The net figure is shown on every unreleased milestone, because the gross
- * amount is not what the developer receives and only showing gross would
+ * The net figure is shown on every unsettled milestone, because the gross
+ * amount is not what the developer receives and showing gross alone would
  * overstate their payment by the fee on every screen.
  */
 
 function DeadlineCell({ milestone }: { milestone: Milestone }) {
-  if (milestone.deadline === 0n) {
-    return <span className="text-meta text-fg-muted">No deadline</span>;
-  }
-
   const date = formatDate(milestone.deadline);
   const remaining = formatCountdown(milestone.deadline);
-  const settled = milestone.released || milestone.cancelled;
+  const settled = milestone.status !== OnChainMilestoneStatus.Pending;
 
   return (
     <span className="inline-flex flex-col gap-0.5">
@@ -55,28 +51,34 @@ function DeadlineCell({ milestone }: { milestone: Milestone }) {
 
 export function MilestoneList({
   detail,
+  names,
   canRelease,
-  canCancel,
+  canReclaim,
   busyIndex,
   onRelease,
-  onCancel,
+  onReclaim,
 }: {
   detail: EscrowDetail;
+  /** Milestone descriptions from the project's IPFS metadata, by index. */
+  names?: Record<number, string>;
   /** The connected wallet is the funder and the escrow is funded. */
   canRelease: boolean;
-  canCancel: boolean;
+  /** As above, and no live dispute is freezing reclaim. */
+  canReclaim: boolean;
   /** Index currently mid-transaction, or null. */
   busyIndex: number | null;
   onRelease: (milestone: Milestone) => void;
-  onCancel: (milestone: Milestone) => void;
+  onReclaim: (milestone: Milestone) => void;
 }) {
+  const fee = (amount: bigint) => (amount * detail.feeBps) / 10_000n;
+
   return (
     <ol className="flex flex-col">
       {detail.milestones.map((milestone) => {
         const status = milestoneStatus(milestone);
-        const settled = milestone.released || milestone.cancelled;
-        const cancellable = canCancel && canCancelMilestone(milestone);
-        const releasable = canRelease && !settled;
+        const settled = milestone.status !== OnChainMilestoneStatus.Pending;
+        const releasable = canRelease && isReleasable(milestone);
+        const reclaimable = canReclaim && isReclaimable(milestone);
         const busy = busyIndex === milestone.index;
 
         return (
@@ -90,7 +92,7 @@ export function MilestoneList({
 
             <div className="min-w-0 flex-1">
               <p className={cn('text-body', settled ? 'text-fg-secondary' : 'text-fg')}>
-                {milestone.description || `Milestone ${milestone.index + 1}`}
+                {names?.[milestone.index] || `Milestone ${milestone.index + 1}`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 <StatusPill status={status} />
@@ -105,18 +107,18 @@ export function MilestoneList({
               {!settled && (
                 <p className="mt-1 text-micro text-fg-muted">
                   <span className="font-mono tabular-nums">
-                    {formatTokenAmount(calculateNetAmount(milestone.amount), detail.token.decimals)}
+                    {formatTokenAmount(milestone.amount - fee(milestone.amount), detail.token.decimals)}
                   </span>{' '}
                   to the developer after a{' '}
                   <span className="font-mono tabular-nums">
-                    {formatTokenAmount(calculateFee(milestone.amount), detail.token.decimals)}
+                    {formatTokenAmount(fee(milestone.amount), detail.token.decimals)}
                   </span>{' '}
                   fee
                 </p>
               )}
             </div>
 
-            {(releasable || cancellable) && (
+            {(releasable || reclaimable) && (
               <div className="flex shrink-0 gap-2 sm:pt-0.5">
                 {releasable && (
                   <Button
@@ -128,9 +130,9 @@ export function MilestoneList({
                     Release
                   </Button>
                 )}
-                {cancellable && (
-                  <Button size="sm" variant="ghost" onClick={() => onCancel(milestone)}>
-                    Cancel
+                {reclaimable && (
+                  <Button size="sm" variant="ghost" onClick={() => onReclaim(milestone)}>
+                    Reclaim
                   </Button>
                 )}
               </div>

@@ -10,9 +10,9 @@ import { Table } from '@/components/ui/Table';
 import { DisclosureNote } from '@/components/trust/Trust';
 import { Person } from '@/components/trust/Identity';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
-import { useEscrowProjects } from '@/hooks/queries';
+import { useEscrowProjects, useEscrowTitles } from '@/hooks/queries';
 import { formatDate, isAddressEqual } from '@/lib/format';
-import type { RegistryProject } from '@/chain/escrowRegistry';
+import type { FactoryProject } from '@/chain/escrowFactory';
 
 /**
  * Escrows belonging to the connected wallet.
@@ -31,6 +31,9 @@ import type { RegistryProject } from '@/chain/escrowRegistry';
 export function EscrowListClient() {
   const wallet = useWalletContext();
   const escrows = useEscrowProjects(wallet.account);
+  // Titles live on IPFS now, so they arrive after the rows do. The table
+  // renders immediately with ids and fills the names in.
+  const titles = useEscrowTitles(escrows.data);
 
   if (!wallet.account) {
     return (
@@ -60,7 +63,7 @@ export function EscrowListClient() {
     );
   }
 
-  function roleOf(project: RegistryProject): string {
+  function roleOf(project: FactoryProject): string {
     if (isAddressEqual(project.funder, wallet.account)) return 'Funder';
     if (isAddressEqual(project.developer, wallet.account)) return 'Developer';
     return 'Observer';
@@ -118,7 +121,8 @@ export function EscrowListClient() {
                       href={`/escrow/${project.escrowAddress}`}
                       className="text-fg hover:underline underline-offset-4"
                     >
-                      {project.title || `Escrow #${project.projectId}`}
+                      {titles.data?.[project.metadataCID] ||
+                        `Escrow #${project.projectId}`}
                     </Link>
                   ),
                 },

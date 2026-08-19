@@ -21,37 +21,53 @@ import { MilestoneList } from '@/components/escrow/MilestoneList';
 import { DisputeDialog } from '@/components/escrow/DisputeDialog';
 import { DisputeRoom } from '@/components/escrow/DisputeRoom';
 import {
-  cancelMilestoneIntent,
-  cancelProjectIntent,
   fundEscrowIntent,
   raiseDisputeIntent,
-  releaseMilestoneIntent,
-  resolveToDeveloperIntent,
-  resolveToFunderIntent,
+  reclaimMilestonesIntent,
+  releaseMilestonesIntent,
+  sweepIntent,
+  withdrawDisputeIntent,
 } from '@/components/escrow/intents';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
 import {
   queryKeys,
   useAllEscrowProjects,
   useEscrow,
+  useIpfsJson,
   useTokenAllowance,
+  useTokenPermitSupport,
 } from '@/hooks/queries';
 import { useTransaction } from '@/hooks/useTransaction';
-import { permissionsFor, roleFor, type Milestone } from '@/chain/escrow';
+import {
+  isReclaimable,
+  permissionsFor,
+  roleFor,
+  sweepUnlocksAt,
+  type Milestone,
+} from '@/chain/escrow';
 import { DEFAULT_CHAIN, PROTOCOL } from '@/chain/config';
 import { formatCountdown, formatDate, formatDuration, isAddressEqual } from '@/lib/format';
+import { milestoneNames, type EscrowMetadata } from '@/lib/escrow-metadata';
 import { cn } from '@/lib/cn';
-import { EscrowState, escrowState, isTerminalEscrowState } from '@/lib/status';
+import {
+  DISPUTE_FROZEN,
+  EscrowState,
+  OnChainMilestoneStatus,
+  escrowState,
+  isTerminalEscrowState,
+} from '@/lib/status';
 
 /**
  * One escrow, in full.
  *
  * Everything on this page is read from the contract itself. Nothing is
  * inferred, defaulted or padded: if a figure is not on chain it is not shown.
+ * The only exception is the title and the milestone names, which are text on
+ * IPFS — and the page renders completely without them.
  *
  * The action rail only offers what the connected wallet can actually do right
- * now — the contract's own rules, mirrored — so a user is never invited into
- * a transaction that will revert after they have paid for gas.
+ * now — the contract's own rules, mirrored — so a user is never invited into a
+ * transaction that will revert after they have paid for gas.
  */
 export function EscrowDetailClient({ address }: { address: string }) {
   const wallet = useWalletContext();
@@ -60,11 +76,13 @@ export function EscrowDetailClient({ address }: { address: string }) {
   const escrow = useEscrow(address);
   const detail = escrow.data;
 
-  // The registry has no address→project lookup, so the title comes from the
-  // paginated listing. It is one cached call, and the page is fully usable
+  // The factory has no address→project view, so the listing comes from the
+  // paginated index. It is one cached call, and the page is fully usable
   // without it.
   const registry = useAllEscrowProjects();
   const listing = registry.data?.find((p) => isAddressEqual(p.escrowAddress, address));
+  const metadata = useIpfsJson<EscrowMetadata>(listing?.metadataCID);
+  const names = milestoneNames(metadata.data);
 
   const role = detail ? roleFor(detail, wallet.account) : 'observer';
   const permissions = detail ? permissionsFor(detail, role) : null;
@@ -73,6 +91,10 @@ export function EscrowDetailClient({ address }: { address: string }) {
     detail?.paymentToken,
     wallet.account,
     permissions?.canFund ? address : null,
+  );
+  const permit = useTokenPermitSupport(
+    permissions?.canFund ? detail?.paymentToken : null,
+    wallet.account,
   );
 
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
@@ -113,7 +135,7 @@ export function EscrowDetailClient({ address }: { address: string }) {
             onRetry={() => void escrow.refetch()}
           />
           <p className="mt-5 text-secondary text-fg-secondary">
-            This address may not be a SimpleMilestoneEscrow contract, or may not exist on{' '}
+            This address may not be a MilestoneEscrow contract, or may not exist on{' '}
             {DEFAULT_CHAIN.label}.
           </p>
           <Link href="/escrow" className={cn(buttonClasses(), 'mt-6')}>
@@ -127,35 +149,51 @@ export function EscrowDetailClient({ address }: { address: string }) {
 
   const status = escrowState(detail.state);
   const settled = isTerminalEscrowState(detail.state);
-  const remaining = detail.milestones
-    .filter((m) => !m.released && !m.cancelled)
-    .reduce((sum, m) => sum + m.amount, 0n);
 
-  const disputeUnlock = permissions?.disputeUnlocksAt;
-  const disputeCountdown = disputeUnlock ? formatCountdown(disputeUnlock) : null;
+  const pending = detail.milestones.filter(
+    (m) => m.status === OnChainMilestoneStatus.Pending,
+  );
+  const remaining = pending.reduce((sum, m) => sum + m.amount, 0n);
+  // `isReclaimable` rather than a second deadline comparison here: it is the
+  // same predicate the contract enforces and the one `MilestoneList` uses for
+  // its per-row button, so the batch action and the rows can never disagree
+  // about which milestones are eligible.
+  const overdue = pending.filter(isReclaimable);
+
+  const disputeCountdown = detail.frozen ? formatCountdown(detail.disputeExpiresAt) : null;
+  const raisedBy = detail.funderRaisedDispute
+    ? detail.developerRaisedDispute
+      ? 'both parties'
+      : 'the funder'
+    : 'the developer';
 
   /* ------------------------------------------------------------- actions */
 
   function release(milestone: Milestone) {
     setBusyIndex(milestone.index);
-    tx.start(releaseMilestoneIntent(detail!, milestone));
+    tx.start(releaseMilestonesIntent(detail!, [milestone], names));
   }
 
-  function cancel(milestone: Milestone) {
+  function reclaim(milestone: Milestone) {
     setBusyIndex(milestone.index);
-    tx.start(cancelMilestoneIntent(detail!, milestone));
+    tx.start(reclaimMilestonesIntent(detail!, [milestone], names));
   }
 
   return (
     <Page>
       <PageHeader
         eyebrow="Escrow"
-        title={listing?.title || 'Milestone escrow'}
+        title={metadata.data?.title || 'Milestone escrow'}
         description={
-          listing?.description ||
+          metadata.data?.description ||
           'A contract holding funds that are released milestone by milestone.'
         }
-        actions={<StatusPill status={status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill status={status} />
+            {detail.frozen && <StatusPill status={DISPUTE_FROZEN} />}
+          </div>
+        }
       />
 
       {/* The state descriptor explains what the badge above actually means
@@ -173,20 +211,19 @@ export function EscrowDetailClient({ address }: { address: string }) {
           />
           <Stat
             label="Released"
-            value={<TokenAmount amount={detail.releasedAmount} token={detail.token} />}
-            // The contract accumulates gross here while the event reports net.
-            // Saying which one this is prevents the two being read as equal.
+            value={<TokenAmount amount={detail.releasedGross} token={detail.token} />}
+            // Gross, and said so. The developer received this minus the fee.
             detail="Before fees"
           />
           <Stat
             label="Still committed"
             value={<TokenAmount amount={remaining} token={detail.token} />}
-            detail="Unreleased milestones"
+            detail={`${pending.length} unsettled`}
           />
           <Stat
-            label="Held by contract"
-            value={<TokenAmount amount={detail.contractBalance} token={detail.token} />}
-            detail="Live token balance"
+            label="Returned to funder"
+            value={<TokenAmount amount={detail.reclaimedTotal} token={detail.token} />}
+            detail="Reclaimed after deadline"
           />
         </dl>
       </Section>
@@ -196,32 +233,27 @@ export function EscrowDetailClient({ address }: { address: string }) {
       <div className="flex flex-col gap-3 pt-8">
         {detail.state === EscrowState.Created && (
           <Alert tone="warning" title="This escrow holds no funds yet">
-            The contract is deployed but nothing has been deposited. No work is protected
-            until it is funded.
+            The contract exists but nothing has been deposited. No work is protected until it
+            is funded.
           </Alert>
         )}
 
-        {detail.state === EscrowState.Disputed && (
+        {detail.frozen && (
           <Alert
-            tone="danger"
+            tone="warning"
             title="A dispute is open"
-            icon={<ShieldAlert className="size-4 text-danger-text" aria-hidden />}
+            icon={<ShieldAlert className="size-4 text-warning-text" aria-hidden />}
           >
-            {/* Not "paused" — there is no path from Disputed back to Funded.
-                Milestone work is over for good; only the two terminal
-                resolutions remain. */}
-            Milestone releases have ended permanently and the dispute cannot be withdrawn.
-            The funder can end this in their own favour at any time.{' '}
-            {disputeCountdown
-              ? `The developer can claim the remaining balance in ${disputeCountdown}.`
-              : 'The developer can now also claim the remaining balance.'}
-            {disputeUnlock && (
-              <span className="mt-1 block text-meta text-fg-muted">
-                Raised {formatDate(detail.disputeRaisedAt)} · developer unlocked{' '}
-                {formatDate(disputeUnlock)}
-              </span>
-            )}
-
+            {/* Stated precisely, because the obvious reading of "disputed" —
+                that everything is frozen — is wrong in the direction that
+                matters. Payment is never blocked. */}
+            The funder cannot reclaim overdue milestones while this is open, but can still
+            release them. It moves no money and decides nothing on its own.
+            <span className="mt-1 block text-meta text-fg-muted">
+              Raised by {raisedBy} · lapses{' '}
+              {disputeCountdown ? `in ${disputeCountdown}` : 'shortly'} (
+              {formatDate(detail.disputeExpiresAt)})
+            </span>
             {/* Offered to the two parties only. An observer has nothing to
                 settle and should not be creating rooms about it. */}
             {role !== 'observer' && (
@@ -255,8 +287,8 @@ export function EscrowDetailClient({ address }: { address: string }) {
               )}
             </dd>
             <p className="mt-2 text-meta text-fg-muted">
-              Deposits the funds. Solely controls releases, milestone cancellation and
-              cancelling the project.
+              Deposits the funds and decides what to release. Can only take money back after
+              a milestone&rsquo;s deadline passes unreleased.
             </p>
           </div>
           <div>
@@ -268,8 +300,8 @@ export function EscrowDetailClient({ address }: { address: string }) {
               )}
             </dd>
             <p className="mt-2 text-meta text-fg-muted">
-              Receives each milestone when the funder releases it. Cannot move funds, and
-              can only raise a dispute.
+              Receives each milestone when the funder releases it. Cannot move funds, and can
+              raise one dispute to freeze reclaims.
             </p>
           </div>
         </dl>
@@ -287,47 +319,78 @@ export function EscrowDetailClient({ address }: { address: string }) {
       >
         {detail.milestones.length === 0 ? (
           <p className="py-6 text-body text-fg-secondary">
-            This escrow was deployed with no milestones.
+            This escrow was created with no milestones.
           </p>
         ) : (
           <MilestoneList
             detail={detail}
+            names={names}
             canRelease={permissions?.canRelease ?? false}
-            canCancel={permissions?.canCancelMilestone ?? false}
+            canReclaim={permissions?.canReclaim ?? false}
             busyIndex={tx.isBusy ? busyIndex : null}
             onRelease={release}
-            onCancel={cancel}
+            onReclaim={reclaim}
           />
         )}
 
         {permissions?.canRelease && (
           <DisclosureNote className="mt-6">
-            A {Number(PROTOCOL.feeBasisPoints) / 100}% platform fee is deducted from each
-            milestone when it is released and sent to a fixed address. No fee is charged on
-            cancellation or dispute resolution.
+            A {Number(detail.feeBps) / 100}% platform fee is deducted from each milestone when
+            it is released. Nothing is charged on funds that come back to you.
           </DisclosureNote>
         )}
 
-        {permissions?.canCancelMilestone && (
+        {role === 'funder' && !settled && (
           <DisclosureNote className="mt-3">
-            A milestone can only be cancelled after its deadline has passed. Milestones
-            without a deadline can never be cancelled individually.
+            You can release any milestone at any time. You can only reclaim one after its
+            deadline has passed without release — until then the money is committed, which is
+            what makes this an escrow rather than a wallet.
+          </DisclosureNote>
+        )}
+
+        {role === 'funder' && detail.frozen && overdue.length > 0 && (
+          <DisclosureNote tone="caution" className="mt-3">
+            {overdue.length} milestone{overdue.length === 1 ? ' is' : 's are'} past their
+            deadline, but an open dispute freezes reclaims until{' '}
+            {formatDate(detail.disputeExpiresAt)}. You can still release them.
           </DisclosureNote>
         )}
       </Section>
 
       {/* ------------------------------------------------------- actions */}
 
-      {wallet.account && role !== 'observer' && !settled && (
+      {wallet.account && !settled && (role !== 'observer' || permissions?.canSweep) && (
         <Section title="Actions">
           <div className="flex flex-wrap gap-3">
             {permissions?.canFund && (
               <Button
                 variant="primary"
-                loading={allowance.isPending}
-                onClick={() => tx.start(fundEscrowIntent(detail, allowance.data ?? 0n))}
+                loading={allowance.isPending || permit.isPending}
+                onClick={() =>
+                  tx.start(
+                    fundEscrowIntent(detail, allowance.data ?? 0n, permit.data ?? false),
+                  )
+                }
               >
                 Fund this escrow
+              </Button>
+            )}
+
+            {permissions?.canRelease && pending.length > 1 && (
+              <Button
+                variant="secondary"
+                onClick={() => tx.start(releaseMilestonesIntent(detail, pending, names))}
+              >
+                Release all {pending.length} remaining
+              </Button>
+            )}
+
+            {permissions?.canReclaim && overdue.length > 1 && (
+              <Button
+                variant="ghost"
+                onClick={() => tx.start(reclaimMilestonesIntent(detail, overdue, names))}
+              >
+                Reclaim {overdue.length} overdue
               </Button>
             )}
 
@@ -341,36 +404,33 @@ export function EscrowDetailClient({ address }: { address: string }) {
               </Button>
             )}
 
-            {permissions?.canResolveToFunder && (
-              <Button variant="danger" onClick={() => tx.start(resolveToFunderIntent(detail))}>
-                Return remaining funds to me
+            {permissions?.canWithdrawDispute && (
+              <Button variant="ghost" onClick={() => tx.start(withdrawDisputeIntent(detail))}>
+                Withdraw dispute
               </Button>
             )}
 
-            {permissions?.canCancelProject && (
-              <Button variant="ghost" onClick={() => tx.start(cancelProjectIntent(detail))}>
-                Cancel project
-              </Button>
-            )}
-
-            {role === 'developer' && detail.state === EscrowState.Disputed && (
-              <Button
-                variant="secondary"
-                disabled={!permissions?.canResolveToDeveloper}
-                onClick={() => tx.start(resolveToDeveloperIntent(detail))}
-              >
-                {permissions?.canResolveToDeveloper
-                  ? 'Claim remaining funds'
-                  : `Claim available in ${disputeCountdown ?? formatDuration(PROTOCOL.disputeTimeoutSeconds)}`}
+            {permissions?.canSweep && (
+              <Button variant="ghost" onClick={() => tx.start(sweepIntent(detail))}>
+                Close and return funds to the funder
               </Button>
             )}
           </div>
 
           {role === 'developer' && (
             <DisclosureNote tone="caution" className="mt-6">
-              As the developer you cannot release, cancel or withdraw. Raising a dispute
-              pauses releases, but the funder can end it in their own favour immediately
-              while you must wait {formatDuration(PROTOCOL.disputeTimeoutSeconds)}.
+              There is no arbitrator. Nothing on chain can judge whether you delivered, so the
+              funder cannot be forced to release a milestone — if they refuse, the money
+              returns to them once the deadline passes. What this contract does guarantee is
+              that the funds exist, and that they cannot be withdrawn before then.
+            </DisclosureNote>
+          )}
+
+          {role === 'funder' && detail.state === EscrowState.Funded && (
+            <DisclosureNote className="mt-6">
+              Anything still unsettled {formatDuration(PROTOCOL.sweepGraceSeconds)} after the
+              last deadline ({formatDate(sweepUnlocksAt(detail))}) can be returned to you by
+              anyone, so funds cannot be stranded here.
             </DisclosureNote>
           )}
         </Section>
@@ -405,19 +465,29 @@ export function EscrowDetailClient({ address }: { address: string }) {
               </dd>
             </div>
             <div>
+              {/* Read from this escrow, not from the app's constants — the
+                  interface must never quote a fee the contract will not take. */}
               <dt className="text-meta text-fg-muted">
-                Fee recipient — {Number(PROTOCOL.feeBasisPoints) / 100}% on release
+                Fee recipient — {Number(detail.feeBps) / 100}% on release
               </dt>
               <dd className="mt-1.5">
-                <AddressDisplay address={PROTOCOL.feeRecipient} chars={8} />
+                <AddressDisplay address={detail.feeRecipient} chars={8} />
               </dd>
             </div>
             <div>
-              <dt className="text-meta text-fg-muted">Fees collected to date</dt>
+              <dt className="text-meta text-fg-muted">Held by contract</dt>
               <dd className="mt-1.5">
-                <TokenAmount amount={detail.totalFeesCollected} token={detail.token} />
+                <TokenAmount amount={detail.contractBalance} token={detail.token} />
               </dd>
             </div>
+            {listing?.metadataCID && (
+              <div>
+                <dt className="text-meta text-fg-muted">Project metadata</dt>
+                <dd className="mt-1.5 font-mono text-code break-all text-fg-secondary">
+                  {listing.metadataCID}
+                </dd>
+              </div>
+            )}
           </dl>
         </TechnicalDetails>
       </div>

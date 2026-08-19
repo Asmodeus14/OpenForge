@@ -102,7 +102,9 @@ export default async function FundingPage() {
             <FundingProgressLegend className="mb-7" />
 
             <ol className="flex flex-col">
-              {projects.map(({ listing, escrow }) => (
+              {/* `meta`, not `metadata` — this module already exports a
+                  Next.js `metadata` for the page itself. */}
+              {projects.map(({ listing, escrow, metadata: meta }) => (
                 <li
                   key={listing.escrowAddress}
                   className="border-t border-line py-7 last:border-b"
@@ -113,12 +115,12 @@ export default async function FundingPage() {
                         href={`/escrow/${listing.escrowAddress}`}
                         className="text-section text-fg hover:underline underline-offset-4"
                       >
-                        {listing.title || `Escrow #${listing.projectId}`}
+                        {meta?.title || `Escrow #${listing.projectId}`}
                       </Link>
 
-                      {listing.description && (
+                      {meta?.description && (
                         <p className="mt-1.5 max-w-2xl text-secondary text-fg-secondary">
-                          {listing.description}
+                          {meta.description}
                         </p>
                       )}
 
@@ -149,7 +151,7 @@ export default async function FundingPage() {
                             />
                           </p>
                           <p className="mt-1 text-meta text-fg-muted">
-                            {formatTokenAmount(escrow.releasedAmount, escrow.token.decimals)}{' '}
+                            {formatTokenAmount(escrow.releasedGross, escrow.token.decimals)}{' '}
                             paid ·{' '}
                             {formatTokenAmount(escrow.contractBalance, escrow.token.decimals)}{' '}
                             held
@@ -167,7 +169,7 @@ export default async function FundingPage() {
                     <FundingProgress
                       className="mt-5"
                       total={escrow.totalAmount}
-                      released={escrow.releasedAmount}
+                      released={escrow.releasedGross}
                       held={escrow.contractBalance}
                     />
                   )}

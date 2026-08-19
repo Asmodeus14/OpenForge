@@ -47,16 +47,17 @@ const HONESTY = [
     heading: 'What the contract guarantees',
     points: [
       'The deposited amount is held by the contract, not by OpenForge. Nobody here can move it.',
-      'Milestone amounts, deadlines and both wallet addresses are fixed at deployment and cannot be altered by anyone, including us.',
-      'Every release, cancellation and dispute is a public transaction you can verify on a block explorer.',
-      'The full source of the contract is in the repository and its bytecode matches what is deployed.',
+      'Milestone amounts, deadlines and both wallet addresses are fixed when the escrow is created and cannot be altered by anyone, including us.',
+      'The funder cannot take a milestone back before its deadline. Until then the money is committed to the work.',
+      'Every release, reclaim and dispute is a public transaction you can verify on a block explorer.',
+      'Each escrow is deployed by the factory from published source, so the contract holding your money is the one in the repository.',
     ],
   },
   {
     heading: 'What it does not',
     points: [
-      'The funder holds the power. They alone decide when a milestone is released, and they can cancel unreleased milestones after their deadline and take that money back.',
-      `Either side can raise a dispute, but the two are not equal: the funder can resolve one in their own favour immediately, while the developer must wait ${formatDuration(PROTOCOL.disputeTimeoutSeconds)}.`,
+      'It cannot make anyone pay for work. Nothing on chain can judge whether a milestone was delivered, so the funder decides — and if they refuse, the money returns to them once the deadline passes.',
+      `Either side can raise one dispute. It freezes reclaims for ${formatDuration(PROTOCOL.disputeWindowSeconds)} to create room to settle; it awards nothing to anybody.`,
       'There is no arbitration, no appeal and no support team that can reverse anything.',
       'The contracts have not been audited.',
     ],
@@ -217,13 +218,14 @@ export default function LandingPage() {
                   address: DEFAULT_CHAIN.contracts.projectRegistry,
                 },
                 {
-                  label: 'Escrow registry',
-                  detail: 'The index of deployed milestone escrows.',
-                  address: DEFAULT_CHAIN.contracts.escrowRegistry,
+                  label: 'Escrow factory',
+                  detail:
+                    'Deploys every milestone escrow and indexes it. An escrow it did not create cannot appear here.',
+                  address: DEFAULT_CHAIN.contracts.escrowFactory,
                 },
                 {
                   label: 'Fee recipient',
-                  detail: `Receives the ${Number(PROTOCOL.feeBasisPoints) / 100}% fee charged when a milestone is released. A fixed address, hardcoded in the contract.`,
+                  detail: `Receives the ${Number(PROTOCOL.feeBasisPoints) / 100}% fee charged when a milestone is released. Nothing is charged on funds returned to the funder.`,
                   address: PROTOCOL.feeRecipient,
                 },
               ].map((row) => (

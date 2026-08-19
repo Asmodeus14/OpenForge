@@ -5,7 +5,7 @@
 import { getReadProvider } from '../chain/clients';
 import { DEFAULT_CHAIN, calculateFee, calculateNetAmount, PROTOCOL } from '../chain/config';
 import { getNextProjectId, getRecentProjects } from '../chain/projectRegistry';
-import { getTotalProjects } from '../chain/escrowRegistry';
+import { getTotalProjects } from '../chain/escrowFactory';
 import { getProfileCid } from '../chain/profileRegistry';
 import { fetchIpfsJson } from '../lib/ipfs';
 import { formatTokenAmount } from '../lib/format';

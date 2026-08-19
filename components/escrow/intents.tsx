@@ -1,27 +1,20 @@
 import { createElement } from 'react';
 import {
   approveToken,
-  cancelMilestone,
-  cancelProject,
-  deployEscrow,
   fundEscrow,
+  fundEscrowWithPermit,
   raiseDispute,
-  releaseMilestone,
-  resolveDisputeToDeveloper,
-  resolveDisputeToFunder,
-  type DeployEscrowParams,
+  reclaimMilestones,
+  releaseMilestones,
+  sweepEscrow,
+  withdrawDispute,
   type EscrowDetail,
   type Milestone,
 } from '@/chain/escrow';
-import { registerProject } from '@/chain/escrowRegistry';
-import {
-  DEFAULT_CHAIN,
-  PROTOCOL,
-  calculateFee,
-  calculateNetAmount,
-  type TokenInfo,
-} from '@/chain/config';
-import { formatTokenAmount, formatDuration, shortenAddress } from '@/lib/format';
+import { createEscrow, type CreateEscrowParams } from '@/chain/escrowFactory';
+import { signPermit } from '@/chain/erc20';
+import { DEFAULT_CHAIN, PROTOCOL, type TokenInfo } from '@/chain/config';
+import { formatTokenAmount, formatDuration, formatDate, shortenAddress } from '@/lib/format';
 import { AddressDisplay, TokenAmount } from '@/components/trust/Trust';
 import type { TxIntent } from '@/hooks/useTransaction';
 
@@ -30,12 +23,20 @@ import type { TxIntent } from '@/hooks/useTransaction';
  *
  * Kept beside the contract calls they describe, so the facts a user is shown
  * cannot drift away from what the transaction actually does. Every intent
- * states the amount, the recipient, the fee and the consequence before a
- * wallet is ever opened.
+ * states the amount, the recipient, the fee and the consequence before a wallet
+ * is ever opened.
  *
- * Facts are built with the same `TokenAmount` and `AddressDisplay`
- * components the pages use, so a figure in a confirmation dialog is produced
- * by identical code to the figure on the page behind it.
+ * Facts are built with the same `TokenAmount` and `AddressDisplay` components
+ * the pages use, so a figure in a confirmation dialog is produced by identical
+ * code to the figure on the page behind it.
+ *
+ * The disclosures here changed substantially with the v2 contract, because what
+ * they had to disclose changed. They used to warn that the funder could cancel
+ * the project and take back every unreleased token at any moment, and that the
+ * funder could win any dispute instantly while the developer waited thirty
+ * days. Both of those powers are gone, so the copy describing them would now be
+ * a lie in the opposite direction — claiming a danger that no longer exists is
+ * as inaccurate as hiding one that does.
  */
 
 const amountFact = (label: string, amount: bigint, detail: EscrowDetail, emphasis = false) => ({
@@ -56,33 +57,60 @@ const addressFact = (label: string, address: string) => ({
 const networkFact = () => ({ label: 'Network', value: DEFAULT_CHAIN.label });
 
 /**
- * Release a milestone.
+ * Fee for a set of milestones, using this escrow's own rate.
  *
- * The button names the NET amount, because that is what the developer
- * actually receives — the gross figure would overstate it by the 1.5% fee.
+ * Summed per milestone rather than taken on the total, because the contract
+ * charges each release separately and Solidity's division truncates. On a
+ * 6-decimal token the two methods can differ, and the figure shown must be the
+ * one the contract will actually take.
  */
-export function releaseMilestoneIntent(
+export function totalFeeFor(amounts: bigint[], feeBps: bigint): bigint {
+  return amounts.reduce((sum, amount) => sum + (amount * feeBps) / 10_000n, 0n);
+}
+
+const feePercent = (feeBps: bigint) => `${Number(feeBps) / 100}%`;
+
+const milestoneLabel = (milestone: Milestone, names?: Record<number, string>) =>
+  names?.[milestone.index] || `Milestone ${milestone.index + 1}`;
+
+/**
+ * Release one or more milestones.
+ *
+ * The button names the NET total, because that is what the developer actually
+ * receives — the gross figure would overstate it by the fee.
+ *
+ * Batched because approving three finished milestones used to cost three
+ * transactions.
+ */
+export function releaseMilestonesIntent(
   detail: EscrowDetail,
-  milestone: Milestone,
+  milestones: Milestone[],
+  names?: Record<number, string>,
 ): TxIntent {
-  const fee = calculateFee(milestone.amount);
-  const net = calculateNetAmount(milestone.amount);
+  const amounts = milestones.map((m) => m.amount);
+  const gross = amounts.reduce((sum, amount) => sum + amount, 0n);
+  const fee = totalFeeFor(amounts, detail.feeBps);
+  const net = gross - fee;
   const netLabel = `${formatTokenAmount(net, detail.token.decimals)} ${detail.token.symbol}`;
+  const many = milestones.length > 1;
 
   return {
-    title: `Release milestone ${milestone.index + 1}`,
+    title: many ? `Release ${milestones.length} milestones` : `Release ${milestoneLabel(milestones[0], names)}`,
     actionLabel: `Release ${netLabel}`,
     irreversible: true,
     facts: [
-      { label: 'Milestone', value: milestone.description || `Milestone ${milestone.index + 1}` },
+      {
+        label: many ? 'Milestones' : 'Milestone',
+        value: milestones.map((m) => milestoneLabel(m, names)).join(', '),
+      },
       addressFact('Recipient', detail.developer),
-      amountFact('Milestone amount', milestone.amount, detail),
-      amountFact('Platform fee (1.5%)', fee, detail),
+      amountFact(many ? 'Total amount' : 'Milestone amount', gross, detail),
+      amountFact(`Platform fee (${feePercent(detail.feeBps)})`, fee, detail),
       amountFact('Developer receives', net, detail, true),
       networkFact(),
     ],
     disclosures: [
-      `A ${Number(PROTOCOL.feeBasisPoints) / 100}% platform fee is deducted on release and sent to a fixed address. No fee is charged on disputes or cancellations.`,
+      `A ${feePercent(detail.feeBps)} platform fee is deducted on release and sent to ${shortenAddress(detail.feeRecipient)}. Nothing is charged when funds go back to you.`,
       'Released funds cannot be recalled. Only release a milestone once you are satisfied the work is complete.',
     ],
     failureReassurance: 'Your funds have NOT been released.',
@@ -91,33 +119,26 @@ export function releaseMilestoneIntent(
       {
         label: `Release ${netLabel}`,
         kind: 'send',
-        description: 'Transfers the milestone reward and pays the platform fee.',
-        run: (signer) => releaseMilestone(signer, detail.address, milestone.index),
+        description: 'Transfers the milestone rewards and pays the platform fee.',
+        run: (signer) =>
+          releaseMilestones(
+            signer,
+            detail.address,
+            milestones.map((m) => m.index),
+          ),
       },
     ],
   };
 }
 
-/**
- * Total fee across a set of milestones.
- *
- * Summed per milestone rather than taken on the total, because the contract
- * charges each release separately and Solidity's division truncates. On a
- * 6-decimal token the two methods can differ, and the figure shown must be
- * the one the contract will actually take.
- */
-export function totalFeeFor(amounts: bigint[]): bigint {
-  return amounts.reduce((sum, amount) => sum + calculateFee(amount), 0n);
-}
-
-export interface DeployEscrowIntentInput {
-  params: DeployEscrowParams;
+export interface CreateEscrowIntentInput {
+  params: CreateEscrowParams;
   token: TokenInfo;
   title: string;
-  description: string;
-  tags: string[];
-  /** Current allowance the escrow token grants. Approval is skipped if it
-   *  already covers the total, so the user is not asked to sign needlessly. */
+  /** Set when the token supports EIP-2612, which removes a whole transaction. */
+  canPermit: boolean;
+  /** Current allowance the token grants. Approval is skipped where it already
+   *  covers the total, so the user is not asked to sign needlessly. */
   existingAllowance: bigint;
   /** Receives the deployed address as soon as it is known, so the caller can
    *  navigate to it even if a later step fails. */
@@ -125,65 +146,92 @@ export interface DeployEscrowIntentInput {
 }
 
 /**
- * Deploy, register, approve and fund — as four visible steps.
+ * Create the escrow and fund it, as visible steps.
  *
- * The old implementation ran these behind a single spinner, so the number of
- * wallet prompts was a surprise and a failure at step three left the user with
- * no idea what had already happened. Each is named here before anything is
- * signed.
+ * This was four transactions: deploy, register, approve, deposit. The factory
+ * deploys and indexes in one, and EIP-2612 collapses approve and deposit into
+ * one more, so a permit-capable token now takes two — plus a signature, which
+ * costs nothing and moves nothing on its own.
  */
-export function deployEscrowIntent(input: DeployEscrowIntentInput): TxIntent {
-  const { params, token, existingAllowance } = input;
+export function createEscrowIntent(input: CreateEscrowIntentInput): TxIntent {
+  const { params, token, existingAllowance, canPermit } = input;
 
   const amounts = params.milestones.map((m) => m.amount);
   const total = amounts.reduce((sum, amount) => sum + amount, 0n);
-  const fee = totalFeeFor(amounts);
+  const fee = totalFeeFor(amounts, PROTOCOL.feeBasisPoints);
   const net = total - fee;
   const totalLabel = `${formatTokenAmount(total, token.decimals)} ${token.symbol}`;
 
-  const needsApproval = existingAllowance < total;
+  const alreadyApproved = existingAllowance >= total;
+  const usePermit = canPermit && !alreadyApproved;
 
-  // Assigned by the deploy step and read by the three that follow it.
+  const lastDeadline = params.milestones.reduce(
+    (max, m) => (m.deadline > max ? m.deadline : max),
+    0n,
+  );
+
+  // Assigned by the first step and read by the ones after it. The address is
+  // only knowable once the factory has actually deployed.
   let escrowAddress = '';
 
   const steps: TxIntent['steps'] = [
     {
-      label: 'Deploy the escrow contract',
+      label: 'Create the escrow',
       kind: 'deploy',
-      description: 'Creates a contract that will hold the funds. No tokens move yet.',
+      description:
+        'Deploys the contract that will hold the funds and lists it, in one transaction. No tokens move yet.',
       run: async (signer) => {
-        const { address, tx } = await deployEscrow(signer, params);
+        const { address, tx } = await createEscrow(signer, params);
         escrowAddress = address;
         input.onDeployed?.(address);
         return tx;
       },
     },
-    {
-      label: 'List it in the project registry',
-      kind: 'send',
-      description:
-        'Without this the escrow has no index entry and cannot be found again from this app.',
-      run: (signer) =>
-        registerProject(signer, escrowAddress, input.title, input.description, input.tags),
-    },
   ];
 
-  if (needsApproval) {
+  if (usePermit) {
+    // Held between the signing step and the deposit step that consumes it.
+    let permit: Awaited<ReturnType<typeof signPermit>> | undefined;
+
+    steps.push(
+      {
+        label: `Authorise ${totalLabel}`,
+        kind: 'sign',
+        description:
+          'A signature, not a transaction. It costs no gas and moves nothing by itself.',
+        run: async (signer) => {
+          permit = await signPermit(signer, params.token, escrowAddress, total);
+        },
+      },
+      {
+        label: `Deposit ${totalLabel}`,
+        kind: 'send',
+        description: 'Applies the authorisation and transfers the full amount into the escrow.',
+        run: (signer) => {
+          if (!permit) throw new Error('The authorisation signature is missing.');
+          return fundEscrowWithPermit(signer, escrowAddress, permit);
+        },
+      },
+    );
+  } else {
+    if (!alreadyApproved) {
+      steps.push({
+        label: `Approve ${totalLabel}`,
+        kind: 'approve',
+        description:
+          'Permits the escrow contract to move this amount. It does not transfer anything.',
+        run: (signer) => approveToken(signer, params.token, escrowAddress, total),
+      });
+    }
     steps.push({
-      label: `Approve ${totalLabel}`,
-      kind: 'approve',
-      description:
-        'Permits the escrow contract to move this amount. It does not transfer anything.',
-      run: (signer) => approveToken(signer, params.token, escrowAddress, total),
+      label: `Deposit ${totalLabel}`,
+      kind: 'send',
+      description: 'Transfers the full amount into the escrow contract.',
+      run: (signer) => fundEscrow(signer, escrowAddress),
     });
   }
 
-  steps.push({
-    label: `Deposit ${totalLabel}`,
-    kind: 'send',
-    description: 'Transfers the full amount into the escrow contract.',
-    run: (signer) => fundEscrow(signer, escrowAddress),
-  });
+  const txCount = steps.filter((step) => step.kind !== 'sign').length;
 
   return {
     title: 'Create and fund an escrow',
@@ -194,6 +242,7 @@ export function deployEscrowIntent(input: DeployEscrowIntentInput): TxIntent {
       addressFact('Developer', params.developer),
       { label: 'Token', value: `${token.symbol} — ${token.name}` },
       { label: 'Milestones', value: String(params.milestones.length) },
+      { label: 'Last deadline', value: formatDate(lastDeadline) },
       {
         label: 'Total deposited',
         value: createElement(TokenAmount, { amount: total, token, size: 'prominent' as const }),
@@ -210,41 +259,73 @@ export function deployEscrowIntent(input: DeployEscrowIntentInput): TxIntent {
       networkFact(),
     ],
     disclosures: [
-      `This takes ${steps.length} wallet confirmations, in this order. Each costs a network fee in ${DEFAULT_CHAIN.nativeSymbol}.`,
-      'You are the funder. Only you can release milestones, cancel them, or cancel the whole project. The developer cannot move funds.',
-      `A ${Number(PROTOCOL.feeBasisPoints) / 100}% fee is deducted from each milestone as it is released, and sent to a fixed address. No fee is charged on disputes or cancellations.`,
-      `Either party can raise a dispute. You could then resolve it in your own favour immediately, while the developer would have to wait ${formatDuration(PROTOCOL.disputeTimeoutSeconds)}.`,
+      usePermit
+        ? `This takes ${txCount} transactions and one signature, in this order. Each transaction costs a network fee in ${DEFAULT_CHAIN.nativeSymbol}; the signature is free.`
+        : `This takes ${txCount} wallet confirmations, in this order. Each costs a network fee in ${DEFAULT_CHAIN.nativeSymbol}.`,
+      'You are the funder. You can release any milestone at any time — paying is never blocked.',
+      "You can only take a milestone's funds back once its deadline has passed without you releasing it. Until then the money is committed, and that commitment is the whole point of an escrow.",
+      `A ${feePercent(PROTOCOL.feeBasisPoints)} fee is deducted from each milestone as it is released. Nothing is charged on funds returned to you.`,
+      'There is no arbitrator. Nothing on chain can judge whether work was delivered, so this contract cannot force you to pay for work you dispute — and cannot force the developer to be paid for work you refuse.',
     ],
-    failureReassurance: 'No contract was deployed and no funds were moved.',
-    successSummary: `${totalLabel} is now held in escrow and released only when you approve each milestone.`,
+    failureReassurance: 'No escrow was created and no funds were moved.',
+    successSummary: `${totalLabel} is now held in escrow, committed until each milestone's deadline.`,
     steps,
   };
 }
 
-/** Deposit into an already-deployed escrow that is still awaiting funds. */
-export function fundEscrowIntent(detail: EscrowDetail, existingAllowance: bigint): TxIntent {
+/** Deposit into an already-created escrow that is still awaiting funds. */
+export function fundEscrowIntent(
+  detail: EscrowDetail,
+  existingAllowance: bigint,
+  canPermit: boolean,
+): TxIntent {
   const total = detail.totalAmount;
   const totalLabel = `${formatTokenAmount(total, detail.token.decimals)} ${detail.token.symbol}`;
-  const needsApproval = existingAllowance < total;
+  const alreadyApproved = existingAllowance >= total;
+  const usePermit = canPermit && !alreadyApproved;
 
   const steps: TxIntent['steps'] = [];
 
-  if (needsApproval) {
+  if (usePermit) {
+    let permit: Awaited<ReturnType<typeof signPermit>> | undefined;
+
+    steps.push(
+      {
+        label: `Authorise ${totalLabel}`,
+        kind: 'sign',
+        description:
+          'A signature, not a transaction. It costs no gas and moves nothing by itself.',
+        run: async (signer) => {
+          permit = await signPermit(signer, detail.paymentToken, detail.address, total);
+        },
+      },
+      {
+        label: `Deposit ${totalLabel}`,
+        kind: 'send',
+        description: 'Applies the authorisation and transfers the full amount into the escrow.',
+        run: (signer) => {
+          if (!permit) throw new Error('The authorisation signature is missing.');
+          return fundEscrowWithPermit(signer, detail.address, permit);
+        },
+      },
+    );
+  } else {
+    if (!alreadyApproved) {
+      steps.push({
+        label: `Approve ${totalLabel}`,
+        kind: 'approve',
+        description:
+          'Permits the escrow contract to move this amount. It does not transfer anything.',
+        run: (signer) => approveToken(signer, detail.paymentToken, detail.address, total),
+      });
+    }
     steps.push({
-      label: `Approve ${totalLabel}`,
-      kind: 'approve',
-      description:
-        'Permits the escrow contract to move this amount. It does not transfer anything.',
-      run: (signer) => approveToken(signer, detail.paymentToken, detail.address, total),
+      label: `Deposit ${totalLabel}`,
+      kind: 'send',
+      description: 'Transfers the full amount into the escrow contract.',
+      run: (signer) => fundEscrow(signer, detail.address),
     });
   }
-
-  steps.push({
-    label: `Deposit ${totalLabel}`,
-    kind: 'send',
-    description: 'Transfers the full amount into the escrow contract.',
-    run: (signer) => fundEscrow(signer, detail.address),
-  });
 
   return {
     title: 'Fund this escrow',
@@ -254,14 +335,20 @@ export function fundEscrowIntent(detail: EscrowDetail, existingAllowance: bigint
       addressFact('Escrow contract', detail.address),
       addressFact('Developer', detail.developer),
       amountFact('Total deposited', total, detail, true),
-      amountFact('Platform fee if all released', totalFeeFor(detail.milestones.map((m) => m.amount)), detail),
+      amountFact(
+        'Platform fee if all released',
+        totalFeeFor(detail.milestones.map((m) => m.amount), detail.feeBps),
+        detail,
+      ),
       networkFact(),
     ],
     disclosures: [
-      needsApproval
-        ? 'This takes two wallet confirmations: an approval, then the deposit itself.'
-        : 'The escrow contract is already approved for this amount, so only the deposit needs confirming.',
-      'Once deposited, funds leave your wallet and are held by the contract. You can release them per milestone, or cancel to have the remainder returned.',
+      usePermit
+        ? 'This takes one signature, which is free, and one transaction.'
+        : alreadyApproved
+          ? 'The escrow contract is already approved for this amount, so only the deposit needs confirming.'
+          : 'This takes two wallet confirmations: an approval, then the deposit itself.',
+      "Once deposited, the funds leave your wallet. You can release them per milestone at any time, but you can only take them back after a milestone's deadline passes unreleased.",
     ],
     failureReassurance: 'No funds were deposited.',
     successSummary: `${totalLabel} is now held in escrow.`,
@@ -269,66 +356,53 @@ export function fundEscrowIntent(detail: EscrowDetail, existingAllowance: bigint
   };
 }
 
-/** Cancel a milestone. Only possible once its deadline has passed. */
-export function cancelMilestoneIntent(
+/**
+ * Reclaim overdue milestones.
+ *
+ * This replaces both `cancelMilestone` and the unrestricted `cancelProject`.
+ * The deadline is the entire difference: the funder cannot touch money
+ * committed to work that is still in date.
+ */
+export function reclaimMilestonesIntent(
   detail: EscrowDetail,
-  milestone: Milestone,
+  milestones: Milestone[],
+  names?: Record<number, string>,
 ): TxIntent {
+  const total = milestones.reduce((sum, m) => sum + m.amount, 0n);
+  const totalLabel = `${formatTokenAmount(total, detail.token.decimals)} ${detail.token.symbol}`;
+  const many = milestones.length > 1;
+
   return {
-    title: `Cancel milestone ${milestone.index + 1}`,
-    actionLabel: 'Cancel milestone',
+    title: many ? `Reclaim ${milestones.length} milestones` : `Reclaim ${milestoneLabel(milestones[0], names)}`,
+    actionLabel: `Reclaim ${totalLabel}`,
     irreversible: true,
     facts: [
-      { label: 'Milestone', value: milestone.description || `Milestone ${milestone.index + 1}` },
-      addressFact('Refunded to', detail.funder),
-      amountFact('Refunded to you', milestone.amount, detail, true),
-      networkFact(),
-    ],
-    disclosures: [
-      // The contract transfers straight back to the funder's wallet — it does
-      // not hold the amount for reallocation.
-      'The full milestone amount is transferred back to your wallet immediately. The developer is not paid for this milestone.',
-      'No platform fee is charged on cancellation, so you receive the whole amount back.',
-      'The rest of the escrow is unaffected and its other milestones remain live.',
-    ],
-    failureReassurance: 'The milestone was not cancelled and no funds moved.',
-    successSummary: `Milestone ${milestone.index + 1} was cancelled and ${formatTokenAmount(milestone.amount, detail.token.decimals)} ${detail.token.symbol} returned to you.`,
-    steps: [
       {
-        label: 'Cancel milestone',
-        kind: 'send',
-        run: (signer) => cancelMilestone(signer, detail.address, milestone.index),
+        label: many ? 'Milestones' : 'Milestone',
+        value: milestones.map((m) => milestoneLabel(m, names)).join(', '),
       },
-    ],
-  };
-}
-
-/** End the whole project and return the remaining balance to the funder. */
-export function cancelProjectIntent(detail: EscrowDetail): TxIntent {
-  const remaining = detail.contractBalance;
-
-  return {
-    title: 'Cancel this project',
-    actionLabel: 'Cancel project',
-    irreversible: true,
-    facts: [
-      addressFact('Escrow contract', detail.address),
-      addressFact('Developer', detail.developer),
-      amountFact('Returned to you', remaining, detail, true),
+      { label: 'Deadline passed', value: formatDate(milestones[0].deadline) },
+      addressFact('Returned to', detail.funder),
+      amountFact('Returned to you', total, detail, true),
       networkFact(),
     ],
     disclosures: [
-      'Every unreleased milestone is cancelled and the remaining balance is returned to you.',
-      'The developer is not paid for any unreleased work, and cannot reverse this.',
-      'Cancelled is a final state. The escrow cannot be restarted.',
+      'These deadlines have passed without the work being released, so the funds return to your wallet immediately.',
+      'No platform fee is charged. This is your own deposit coming back.',
+      'The developer is not paid for this work and cannot reverse it. Any milestone still in date is unaffected.',
     ],
-    failureReassurance: 'The project was not cancelled and your funds have not moved.',
-    successSummary: 'The project was cancelled and the remaining balance returned to you.',
+    failureReassurance: 'Nothing was reclaimed and no funds moved.',
+    successSummary: `${totalLabel} was returned to you.`,
     steps: [
       {
-        label: 'Cancel project',
+        label: `Reclaim ${totalLabel}`,
         kind: 'send',
-        run: (signer) => cancelProject(signer, detail.address),
+        run: (signer) =>
+          reclaimMilestones(
+            signer,
+            detail.address,
+            milestones.map((m) => m.index),
+          ),
       },
     ],
   };
@@ -337,36 +411,40 @@ export function cancelProjectIntent(detail: EscrowDetail): TxIntent {
 /**
  * Raise a dispute.
  *
- * The disclosures state the asymmetry plainly and differently for each role,
- * because it materially disadvantages the developer and hiding that would be
- * the single most dishonest thing this interface could do.
+ * The disclosures are now the same for both roles, because the contract now
+ * treats both roles the same. The previous version had to warn the developer
+ * that the funder could resolve any dispute instantly while they waited thirty
+ * days; that asymmetry was the reason the contract was rewritten.
  */
 export function raiseDisputeIntent(
   detail: EscrowDetail,
   reason: string,
   role: 'funder' | 'developer',
 ): TxIntent {
-  const timeout = formatDuration(PROTOCOL.disputeTimeoutSeconds);
+  const window = formatDuration(PROTOCOL.disputeWindowSeconds);
 
   return {
     title: 'Raise a dispute',
     actionLabel: 'Raise dispute',
-    irreversible: true,
+    irreversible: false,
     facts: [
       { label: 'Reason', value: reason },
       addressFact('Escrow contract', detail.address),
       amountFact('Amount in escrow', detail.contractBalance, detail, true),
+      { label: 'Freezes reclaim for', value: window },
       networkFact(),
     ],
     disclosures: [
-      'Raising a dispute pauses all milestone releases.',
+      `This freezes the funder's ability to reclaim overdue milestones for ${window}, then lapses on its own.`,
+      'It does not pause releases. Paying the developer is never blocked, disputed or not.',
+      'A dispute moves no money and decides nothing. There is no arbitrator — it buys time to settle between yourselves.',
       role === 'developer'
-        ? `The funder can resolve this dispute in their own favour immediately. You cannot resolve it in yours until ${timeout} have passed.`
-        : `You can resolve this dispute in your own favour immediately. The developer cannot resolve it in theirs until ${timeout} have passed.`,
-      'No platform fee is charged on dispute resolution.',
+        ? 'You can raise a dispute once. Use it when a deadline is approaching and you need the funder not to withdraw while you settle.'
+        : 'You can raise a dispute once. Note it freezes your own ability to reclaim, so it is of most use to the developer.',
+      'You can withdraw it early if the disagreement is resolved.',
     ],
     failureReassurance: 'No dispute was raised.',
-    successSummary: 'The dispute is now open and releases are paused.',
+    successSummary: `The dispute is open. Reclaims are frozen for ${window}.`,
     steps: [
       {
         label: 'Raise dispute',
@@ -377,57 +455,66 @@ export function raiseDisputeIntent(
   };
 }
 
-/** Funder resolves in their own favour — permitted immediately. */
-export function resolveToFunderIntent(detail: EscrowDetail): TxIntent {
+/** Lift a live dispute early. Only the party who raised it may do this. */
+export function withdrawDisputeIntent(detail: EscrowDetail): TxIntent {
   return {
-    title: 'Resolve the dispute in your favour',
-    actionLabel: 'Return funds to me',
-    irreversible: true,
+    title: 'Withdraw the dispute',
+    actionLabel: 'Withdraw dispute',
+    irreversible: false,
     facts: [
-      addressFact('Returned to', detail.funder),
-      amountFact('Amount', detail.contractBalance, detail, true),
+      addressFact('Escrow contract', detail.address),
+      { label: 'Would otherwise lapse', value: formatDate(detail.disputeExpiresAt) },
       networkFact(),
     ],
     disclosures: [
-      'The full remaining balance is returned to you and the project is closed as Cancelled.',
-      'The developer is not paid for any unreleased work.',
-      'This is final and cannot be appealed inside OpenForge.',
+      'The freeze on reclaiming overdue milestones lifts immediately.',
+      'You cannot raise a second dispute on this escrow. Each party gets one.',
     ],
-    failureReassurance: 'The dispute was not resolved and no funds moved.',
-    successSummary: 'The remaining balance was returned to you.',
+    failureReassurance: 'The dispute is still open.',
+    successSummary: 'The dispute was withdrawn and the freeze lifted.',
     steps: [
       {
-        label: 'Resolve to funder',
+        label: 'Withdraw dispute',
         kind: 'send',
-        run: (signer) => resolveDisputeToFunder(signer, detail.address),
+        run: (signer) => withdrawDispute(signer, detail.address),
       },
     ],
   };
 }
 
-/** Developer resolves in their own favour — only after the timeout. */
-export function resolveToDeveloperIntent(detail: EscrowDetail): TxIntent {
+/**
+ * Return everything unsettled to the funder, long after the last deadline.
+ *
+ * Callable by anyone, which is why the intent names the destination rather than
+ * saying "to you" — the caller is frequently not the funder. Without this, a
+ * funder who walks away leaves the money in a contract nobody can touch.
+ */
+export function sweepIntent(detail: EscrowDetail): TxIntent {
+  const remaining = detail.contractBalance;
+  const remainingLabel = `${formatTokenAmount(remaining, detail.token.decimals)} ${detail.token.symbol}`;
+
   return {
-    title: 'Resolve the dispute in your favour',
-    actionLabel: 'Claim remaining funds',
+    title: 'Close this escrow',
+    actionLabel: 'Return funds to the funder',
     irreversible: true,
     facts: [
-      addressFact('Paid to', detail.developer),
-      amountFact('Amount', detail.contractBalance, detail, true),
+      addressFact('Escrow contract', detail.address),
+      addressFact('Returned to', detail.funder),
+      amountFact('Amount', remaining, detail, true),
       networkFact(),
     ],
     disclosures: [
-      `The dispute timeout of ${formatDuration(PROTOCOL.disputeTimeoutSeconds)} has passed, so you can now claim the remaining balance.`,
-      'No platform fee is charged on dispute resolution, so you receive the full amount.',
-      'This closes the project as Completed and is final.',
+      `Every deadline passed more than ${formatDuration(PROTOCOL.sweepGraceSeconds)} ago with these milestones unsettled.`,
+      'The funds can only go to the funder, which is why anyone is allowed to make this call.',
+      'This closes the escrow permanently.',
     ],
-    failureReassurance: 'The dispute was not resolved and no funds moved.',
-    successSummary: 'The remaining balance was paid to you.',
+    failureReassurance: 'The escrow was not closed and no funds moved.',
+    successSummary: `${remainingLabel} was returned to ${shortenAddress(detail.funder)} and the escrow is closed.`,
     steps: [
       {
-        label: 'Resolve to developer',
+        label: 'Close and return funds',
         kind: 'send',
-        run: (signer) => resolveDisputeToDeveloper(signer, detail.address),
+        run: (signer) => sweepEscrow(signer, detail.address),
       },
     ],
   };

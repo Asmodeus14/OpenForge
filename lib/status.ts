@@ -92,15 +92,27 @@ export function isTerminalProjectStatus(status: ProjectStatus | number): boolean
   return n === ProjectStatus.Completed || n === ProjectStatus.Failed;
 }
 
-/* ------------------------------------------ SimpleMilestoneEscrow.ProjectState */
+/* ----------------------------------------------- MilestoneEscrow.State */
 
-/** Mirrors the on-chain enum: Created=0, Funded=1, Completed=2, Cancelled=3, Disputed=4. */
+/**
+ * Mirrors the on-chain enum: Created=0, Funded=1, Closed=2.
+ *
+ * There is no `Disputed` state any more, and its absence is the point. It used
+ * to be a state with no exit: raising a dispute permanently ended milestone
+ * releases and forced an all-or-nothing outcome, even if both parties agreed
+ * minutes later that it had been a mistake. A dispute is now a time-boxed
+ * freeze on the funder's ability to *reclaim* — see `disputeWindowSeconds` —
+ * and is reported alongside the state rather than replacing it.
+ *
+ * `Completed` and `Cancelled` also collapsed into one terminal `Closed`. The
+ * old pair was not reliably reachable: completion accepted "every milestone
+ * released or cancelled" while cancellation required *all* cancelled, so a
+ * project with one of each stayed active forever with a zero balance.
+ */
 export const EscrowState = {
   Created: 0,
   Funded: 1,
-  Completed: 2,
-  Cancelled: 3,
-  Disputed: 4,
+  Closed: 2,
 } as const;
 
 export type EscrowState = (typeof EscrowState)[keyof typeof EscrowState];
@@ -119,23 +131,12 @@ const ESCROW_STATE: Record<EscrowState, StatusDescriptor> = {
     icon: 'ShieldCheck',
     description: 'Funds are held by the escrow contract and released per milestone.',
   },
-  [EscrowState.Completed]: {
-    label: 'Completed',
-    tone: 'success',
-    icon: 'CircleCheck',
-    description: 'Every milestone has been released or cancelled. Final state.',
-  },
-  [EscrowState.Cancelled]: {
-    label: 'Cancelled',
+  [EscrowState.Closed]: {
+    label: 'Closed',
     tone: 'neutral',
-    icon: 'CircleSlash',
-    description: 'The project was cancelled and remaining funds returned to the funder. Final state.',
-  },
-  [EscrowState.Disputed]: {
-    label: 'Disputed',
-    tone: 'danger',
-    icon: 'TriangleAlert',
-    description: 'A dispute is open. Releases are paused until it is resolved.',
+    icon: 'CircleCheck',
+    description:
+      'Every milestone has been settled — released to the developer or returned to the funder. Final state.',
   },
 };
 
@@ -150,13 +151,38 @@ export function escrowState(state: EscrowState | number | bigint): StatusDescrip
 }
 
 export function isTerminalEscrowState(state: EscrowState | number): boolean {
-  const n = Number(state);
-  return n === EscrowState.Completed || n === EscrowState.Cancelled;
+  return Number(state) === EscrowState.Closed;
 }
+
+/**
+ * Shown beside the state while a dispute is freezing reclaim.
+ *
+ * Deliberately not `danger`: a live dispute means nobody can lose money to a
+ * deadline for the next fortnight, which is a protection, not a failure. It
+ * decides nothing and moves nothing.
+ */
+export const DISPUTE_FROZEN: StatusDescriptor = {
+  label: 'Disputed',
+  tone: 'warning',
+  icon: 'TriangleAlert',
+  description:
+    'A dispute is open. The funder cannot reclaim overdue milestones until it lapses, but can still release them.',
+};
 
 /* ------------------------------------------------------------- milestones */
 
-export type MilestoneStatus = 'released' | 'cancelled' | 'overdue' | 'pending';
+/** Mirrors MilestoneEscrow.MilestoneStatus: Pending=0, Released=1, Reclaimed=2. */
+export const OnChainMilestoneStatus = {
+  Pending: 0,
+  Released: 1,
+  Reclaimed: 2,
+} as const;
+
+export type OnChainMilestoneStatus =
+  (typeof OnChainMilestoneStatus)[keyof typeof OnChainMilestoneStatus];
+
+/** The on-chain statuses, plus the one the UI derives from the clock. */
+export type MilestoneStatus = 'released' | 'reclaimed' | 'overdue' | 'pending';
 
 const MILESTONE_STATUS: Record<MilestoneStatus, StatusDescriptor> = {
   released: {
@@ -165,45 +191,52 @@ const MILESTONE_STATUS: Record<MilestoneStatus, StatusDescriptor> = {
     icon: 'CircleCheck',
     description: 'Payment for this milestone has been sent to the developer.',
   },
-  cancelled: {
-    label: 'Cancelled',
+  reclaimed: {
+    label: 'Reclaimed',
     tone: 'neutral',
     icon: 'CircleSlash',
-    description: 'This milestone was cancelled and its funds returned to the funder.',
+    description:
+      'The deadline passed without release, and these funds went back to the funder.',
   },
   overdue: {
     label: 'Overdue',
     tone: 'warning',
     icon: 'CalendarClock',
     description:
-      'The deadline has passed. The funder may still release it, or may now cancel it.',
+      'The deadline has passed. The funder may still release this, or may now reclaim it.',
   },
   pending: {
-    label: 'Pending',
+    label: 'In progress',
     tone: 'neutral',
     icon: 'Circle',
-    description: 'Not yet released. Only the funder can release this milestone.',
+    description:
+      'Committed until the deadline. The funder can release this early but cannot take it back before then.',
   },
 };
 
 /**
  * Derives a milestone's status from on-chain fields.
  *
- * Note the contract deliberately allows release *after* the deadline — the
- * deadline only gates cancellation. So "overdue" is informational, not a
- * blocker on payment.
+ * Two things the contract does that this has to reflect faithfully:
+ *
+ * Release is always allowed, deadline or not — paying the other party is never
+ * something the contract blocks. So "overdue" changes who *else* can act, not
+ * whether payment is still possible.
+ *
+ * Reclaim is allowed *only* once the deadline has passed. Before that the money
+ * is genuinely committed, which is the developer's entire protection and the
+ * reason deadlines are mandatory now.
  */
 export function milestoneStatus(milestone: {
-  released: boolean;
-  cancelled: boolean;
+  status: OnChainMilestoneStatus | number;
   deadline: bigint;
 }): StatusDescriptor & { key: MilestoneStatus } {
   let key: MilestoneStatus;
 
-  if (milestone.released) key = 'released';
-  else if (milestone.cancelled) key = 'cancelled';
-  else if (milestone.deadline > 0n && Date.now() / 1000 > Number(milestone.deadline))
-    key = 'overdue';
+  const onChain = Number(milestone.status);
+  if (onChain === OnChainMilestoneStatus.Released) key = 'released';
+  else if (onChain === OnChainMilestoneStatus.Reclaimed) key = 'reclaimed';
+  else if (Date.now() / 1000 > Number(milestone.deadline)) key = 'overdue';
   else key = 'pending';
 
   return { ...MILESTONE_STATUS[key], key };

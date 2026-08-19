@@ -19,6 +19,7 @@ import {
   useDeployGasPreflight,
   useTokenAllowance,
   useTokenBalance,
+  useTokenPermitSupport,
 } from '@/hooks/queries';
 import { GasPreflight } from '@/components/escrow/GasPreflight';
 import { ApprovalGate, useEscrowApproval } from '@/components/escrow/ApprovalGate';
@@ -32,7 +33,7 @@ import {
 } from '@/chain/approval';
 import * as chat from '@/lib/chat/api';
 import { useTransaction } from '@/hooks/useTransaction';
-import { deployEscrowIntent, totalFeeFor } from '@/components/escrow/intents';
+import { createEscrowIntent, totalFeeFor } from '@/components/escrow/intents';
 import { RecipientCheck, type LinkedProject } from '@/components/escrow/RecipientCheck';
 import {
   CUSTOM_TOKEN,
@@ -43,6 +44,8 @@ import {
   type TokenSelection,
 } from '@/components/escrow/TokenSelect';
 import { PROTOCOL } from '@/chain/config';
+import { buildEscrowMetadata } from '@/lib/escrow-metadata';
+import { uploadJsonToIpfs } from '@/lib/ipfs-upload';
 import { formatTokenAmount, parseTokenAmount, isAddressEqual } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -54,9 +57,11 @@ import { cn } from '@/lib/cn';
  * it. A multi-page wizard would hide the total behind a "next" button, which
  * is exactly the figure that must never be out of sight.
  *
- * The four transactions this produces — deploy, register, approve, deposit —
- * are named before anything is signed, so the number of wallet prompts is
- * never a surprise.
+ * Every transaction this produces is named before anything is signed, so the
+ * number of wallet prompts is never a surprise. There used to be four — deploy,
+ * register, approve, deposit. The factory folds the first two together and
+ * EIP-2612 folds the last two, so a permit-capable token now takes two
+ * transactions and one free signature.
  *
  * When reached from a project page the developer field arrives pre-filled with
  * that project's registered builder, and `RecipientCheck` states whether the
@@ -71,7 +76,15 @@ interface MilestoneDraft {
   id: string;
   description: string;
   amount: string;
-  /** Days from now. Empty means no deadline. */
+  /**
+   * Days from now. Required — the contract rejects a deadline that is not in
+   * the future, and there is no "no deadline" option any more.
+   *
+   * That is deliberate rather than a restriction inherited by accident. With
+   * the funder's unrestricted cancel gone, a milestone with no deadline could
+   * never be reclaimed by anybody, and its share of the deposit would sit in
+   * the contract permanently.
+   */
   days: string;
 }
 
@@ -101,8 +114,13 @@ function milestonesFromProposal(proposal: ProposalPayload): MilestoneDraft[] {
     id: crypto.randomUUID(),
     description: milestone.description,
     amount: amountField(BigInt(milestone.amount), proposal.tokenDecimals),
-    // Zero is how "no deadline" is signed; the field expresses that as blank.
-    days: milestone.deadlineDays === '0' ? '' : milestone.deadlineDays,
+    // Older proposals signed 0 for "no deadline", which the contract no
+    // longer accepts. Falling back to the default is visible and editable on
+    // screen before anything is signed or sent.
+    days:
+      !milestone.deadlineDays || milestone.deadlineDays === '0'
+        ? String(DEFAULT_DEADLINE_DAYS)
+        : milestone.deadlineDays,
   }));
 }
 
@@ -174,7 +192,7 @@ export function DeployEscrowWizard({
   );
 
   const total = parsed.reduce((sum, m) => sum + (m.value ?? 0n), 0n);
-  const fee = totalFeeFor(parsed.map((m) => m.value ?? 0n));
+  const fee = totalFeeFor(parsed.map((m) => m.value ?? 0n), PROTOCOL.feeBasisPoints);
 
   const errors: Record<string, string> = {};
 
@@ -205,7 +223,8 @@ export function DeployEscrowWizard({
     if (milestone.value === null)
       return `Enter a number with at most ${token.decimals} decimal places.`;
     if (milestone.value <= 0n) return 'The amount must be greater than zero.';
-    if (milestone.days.trim() && Number(milestone.days) <= 0)
+    if (!milestone.days.trim()) return 'Set a deadline. Every milestone needs one.';
+    if (!Number.isFinite(Number(milestone.days)) || Number(milestone.days) <= 0)
       return 'A deadline must be at least one day away.';
     return '';
   });
@@ -236,7 +255,7 @@ export function DeployEscrowWizard({
       token: token.address,
       milestones: parsed.map((milestone) => ({
         amount: milestone.value!,
-        days: milestone.days.trim() ? Number(milestone.days) : 0,
+        days: Number(milestone.days),
         description: milestone.description.trim(),
       })),
     };
@@ -307,33 +326,67 @@ export function DeployEscrowWizard({
   });
 
   const allowance = useTokenAllowance(token?.address, wallet.account, deployedAddress);
+  const permit = useTokenPermitSupport(token?.address, wallet.account);
 
-  function submit() {
+  /**
+   * Pinning runs before any wallet prompt, so it gets its own state.
+   *
+   * The milestone descriptions are a constructor argument now — by way of the
+   * metadata CID — so they have to exist on IPFS before the escrow can be
+   * created. Doing it here rather than inside the transaction means a pinning
+   * failure costs the user nothing: no wallet opens and no gas is spent.
+   */
+  const [pinning, setPinning] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  async function submit() {
     setSubmitted(true);
+    setPinError(null);
     if (!valid || !wallet.account || !token) return;
+
+    let metadataCID: string;
+    setPinning(true);
+    try {
+      metadataCID = await uploadJsonToIpfs(
+        buildEscrowMetadata({
+          title: title.trim(),
+          description: description.trim(),
+          tags,
+          milestones: parsed.map((milestone) => ({
+            title: milestone.description.trim(),
+          })),
+        }),
+        `${title.trim() || 'escrow'} — OpenForge`,
+      );
+    } catch (error) {
+      setPinError(
+        error instanceof Error
+          ? error.message
+          : 'The project details could not be saved to IPFS.',
+      );
+      return;
+    } finally {
+      setPinning(false);
+    }
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
     tx.start(
-      deployEscrowIntent({
+      createEscrowIntent({
         params: {
-          funder: wallet.account,
           developer: developer.trim(),
           token: token.address,
           milestones: parsed.map((milestone) => ({
             amount: milestone.value!,
-            deadline: milestone.days.trim()
-              ? BigInt(nowSeconds + Number(milestone.days) * 86_400)
-              : 0n,
-            description: milestone.description.trim(),
+            deadline: BigInt(nowSeconds + Number(milestone.days) * 86_400),
           })),
+          metadataCID,
         },
         token,
         title: title.trim(),
-        description: description.trim(),
-        tags,
-        // A freshly deployed contract has no allowance, so the approval step
-        // is always required for a new escrow.
+        canPermit: permit.data ?? false,
+        // A freshly created escrow has no allowance of its own, so this only
+        // ever matters on a retry against an address that already exists.
         existingAllowance: allowance.data ?? 0n,
         onDeployed: setDeployedAddress,
       }),
@@ -454,7 +507,7 @@ export function DeployEscrowWizard({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            submit();
+            void submit();
           }}
           className="flex min-w-0 flex-col gap-10"
         >
@@ -625,7 +678,7 @@ export function DeployEscrowWizard({
                         )
                       }
                       placeholder="30"
-                      hint="Leave blank for no deadline."
+                      hint="Required. After this date you can take the funds back."
                     />
                   </div>
 
@@ -651,9 +704,9 @@ export function DeployEscrowWizard({
 
             <DisclosureNote>
               A deadline does not block payment — you can release a milestone at any time,
-              before or after it. It only unlocks your ability to cancel that milestone and
-              take the money back. A milestone with no deadline can never be cancelled on
-              its own.
+              before or after it. What it does is decide when you may take the money back:
+              before the deadline you cannot, and that commitment is what the developer is
+              relying on.
             </DisclosureNote>
           </div>
 
@@ -671,7 +724,13 @@ export function DeployEscrowWizard({
           <Divider />
 
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" variant="primary" size="lg" disabled={insufficient}>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              loading={pinning}
+              disabled={insufficient}
+            >
               Review escrow
             </Button>
             <Button type="button" variant="ghost" size="lg" onClick={() => router.back()}>
@@ -683,6 +742,15 @@ export function DeployEscrowWizard({
             <p role="alert" className="text-secondary text-danger-text">
               Fix the highlighted fields before continuing.
             </p>
+          )}
+
+          {/* Nothing was signed and no gas was spent — the pin happens before
+              the wallet is ever opened. */}
+          {pinError && (
+            <Alert tone="danger" title="The project details could not be saved">
+              {pinError} No escrow was created and no funds moved. IPFS pinning must
+              succeed first, because the milestone descriptions are stored there.
+            </Alert>
           )}
         </form>
 

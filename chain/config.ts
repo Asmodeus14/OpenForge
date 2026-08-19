@@ -5,8 +5,13 @@
  * Replaces the 185-line `COMMON_ERC20_TOKENS` array and the 13-case
  * `getNetworkInfo` switch that used to live inside EsCrow.tsx.
  *
- * OpenForge is deployed only to Sepolia. Every contract below was verified
- * against the deployment records in OpenForge-Contracts, with no ABI drift.
+ * OpenForge is deployed only to Sepolia.
+ *
+ * `profileRegistry` and `projectRegistry` were verified against the deployment
+ * records in OpenForge-Contracts, with no ABI drift. `escrowFactory` and the
+ * tUSDC below were deployed from this repository's own sources by
+ * `scripts/deploy.js`, and their ABIs are generated from the build artifacts
+ * rather than transcribed, so drift is not possible.
  */
 
 export const SEPOLIA_CHAIN_ID = 11155111;
@@ -37,7 +42,16 @@ export interface ChainInfo {
   contracts: {
     profileRegistry: `0x${string}`;
     projectRegistry: `0x${string}`;
-    escrowRegistry: `0x${string}`;
+    /**
+     * Deploys every escrow and is the registry of the ones it made.
+     *
+     * These were two things before: a standalone registry that accepted *any*
+     * address as an escrow, authenticated only by asking that address whether
+     * `funder()` returned the caller. A contract holding no money could
+     * register itself under any title, and the registry was what the product
+     * listed. A registry that deploys what it registers cannot be lied to.
+     */
+    escrowFactory: `0x${string}`;
   };
 }
 
@@ -66,11 +80,17 @@ export const CHAINS: Record<number, ChainInfo> = {
       {
         // The project's own test token, and the one the escrow was actually
         // exercised against. First in the list, so it is the default.
-        address: '0xbe82627f5d7ba5774df41dacdb2415b66ab2b780',
+        //
+        // This one supports EIP-2612 permit, which is what lets funding an
+        // escrow cost one wallet confirmation instead of two, and it has a
+        // public `faucet()`. Its predecessor minted its entire supply to the
+        // deployer with no mint function, so the only way to get test tokens
+        // was to ask a human for them.
+        address: '0x1f8978Df2681C9F65714fcb12101F328C760e4dC',
         symbol: 'tUSDC',
         name: 'Test USD Coin',
         decimals: 6,
-        note: "OpenForge's own test token",
+        note: "OpenForge's own test token — has a faucet",
       },
       {
         address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
@@ -104,7 +124,7 @@ export const CHAINS: Record<number, ChainInfo> = {
     contracts: {
       profileRegistry: '0xb8c5a55D3b0E838e2f96cBdF893f90c5362F3E46',
       projectRegistry: '0x8796CbE1a841690E51DB3212C88533c0213c66d2',
-      escrowRegistry: '0x19B0aB8A58684F2d4C8E1B0cC4D3e9Ad73d0d59a',
+      escrowFactory: '0x427A2618c0A9251cc7a71058510c9197b2914249',
     },
   },
 };
@@ -130,21 +150,52 @@ export function isSupportedChain(chainId: number | bigint | undefined | null): b
  * happens to their money or their profile.
  */
 export const PROTOCOL = {
-  /** SimpleMilestoneEscrow.FEE_BASIS_POINTS — 150 bps = 1.5%. */
-  feeBasisPoints: 150n,
-  /** SimpleMilestoneEscrow.FEE_RECIPIENT — a fixed address, not a treasury contract. */
-  feeRecipient: '0xC869d7a99fa831b4B3bEe7e245F0C9348C2209a3' as const,
   /**
-   * Charged only on `releaseMilestone`. No fee is taken on dispute
-   * resolution or project cancellation.
+   * EscrowFactory.feeBps — 150 bps = 1.5%.
+   *
+   * An `immutable` set when the factory above was deployed, not a `constant`.
+   * It is therefore fixed for every escrow this factory makes, which is what
+   * makes mirroring it here safe — but it is a property of *this deployment*,
+   * so anything that moves money reads it from the chain rather than trusting
+   * this line. See `fetchFactoryTerms`.
+   */
+  feeBasisPoints: 150n,
+  /**
+   * Where release fees go. Also an immutable on the factory.
+   *
+   * It used to be a compile-time constant baked into every escrow's bytecode,
+   * which meant a lost or compromised key would have sent the fees of every
+   * past and future escrow to a dead address with no way to change it.
+   */
+  feeRecipient: '0x8E1371C3748709C924a1605aD850da7626B8799f' as const,
+  /**
+   * Charged only on `release`. Nothing is taken when money goes back to the
+   * funder by `reclaim` or `sweep` — that is their own deposit returning, and
+   * charging to return it would be charging for a service not rendered.
    */
   feeChargedOn: 'release' as const,
   /**
-   * The developer may call `resolveDisputeToDeveloper()` only after this
-   * period. The funder may call `resolveDisputeToFunder()` immediately.
-   * Inlined as `30 days` in the contract with no public constant to read.
+   * MilestoneEscrow.DISPUTE_WINDOW — a dispute freezes `reclaim` for 14 days
+   * and then lapses on its own.
+   *
+   * This is not the old 30-day timer, and it does not do the same thing. The
+   * previous contract let the funder resolve a dispute in their own favour
+   * immediately while the developer waited thirty days, so the funder won every
+   * dispute by construction. A dispute now decides nothing and moves no money:
+   * it buys whoever raised it a fixed window in which the funder cannot pull
+   * committed funds, and either party may raise one, once each.
    */
-  disputeTimeoutSeconds: 30n * 24n * 60n * 60n,
+  disputeWindowSeconds: 14n * 24n * 60n * 60n,
+  /**
+   * MilestoneEscrow.SWEEP_GRACE — once every deadline is this far past,
+   * anyone may return what is left to the funder.
+   *
+   * Permissionless because the destination is fixed. Without it, a funder who
+   * walks away leaves the money sitting in a contract nobody can touch.
+   */
+  sweepGraceSeconds: 30n * 24n * 60n * 60n,
+  /** MilestoneEscrow.MAX_MILESTONES — the constructor reverts past this. */
+  maxMilestones: 50,
   /** ProfileRegistry.UPDATE_COOLDOWN — 14 days, no override exists. */
   profileUpdateCooldownSeconds: 14n * 24n * 60n * 60n,
 } as const;

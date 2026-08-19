@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { StatusPill } from '@/components/ui/Badge';
-import { useEscrowProjects, useRecentProjects } from '@/hooks/queries';
+import { useEscrowProjects, useEscrowTitles, useRecentProjects } from '@/hooks/queries';
 import { useWalletContext } from '@/components/wallet/WalletProvider';
 import { NAV_ITEMS } from '@/lib/navigation';
 import { projectStatus } from '@/lib/status';
@@ -140,6 +140,7 @@ function CommandPalette() {
   // unused. react-query keeps it warm between openings.
   const { data: projectsPage } = useRecentProjects(0, 50);
   const { data: escrows } = useEscrowProjects(isOpen ? wallet.account : null);
+  const { data: escrowTitles } = useEscrowTitles(isOpen ? escrows : undefined);
 
   const go = useCallback(
     (href: string, remember?: string) => {
@@ -289,13 +290,13 @@ function CommandPalette() {
                   {escrows.map((escrow) => (
                     <Command.Item
                       key={escrow.escrowAddress}
-                      value={`escrow ${escrow.title} ${escrow.escrowAddress}`}
+                      value={`escrow ${escrowTitles?.[escrow.metadataCID] ?? ''} ${escrow.escrowAddress}`}
                       onSelect={() => go(`/escrow/${escrow.escrowAddress}`)}
                       className="of-cmd-item group"
                     >
                       <Item
                         icon={<Wallet className="size-4" aria-hidden />}
-                        label={escrow.title || `Escrow #${escrow.projectId}`}
+                        label={escrowTitles?.[escrow.metadataCID] || `Escrow #${escrow.projectId}`}
                         meta={shortenAddress(escrow.escrowAddress)}
                       />
                     </Command.Item>

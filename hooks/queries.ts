@@ -13,7 +13,7 @@
 
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 import { getReadProvider } from '@/chain/clients';
-import { calculateNetAmount, DEFAULT_CHAIN, type TokenInfo } from '@/chain/config';
+import { DEFAULT_CHAIN, type TokenInfo } from '@/chain/config';
 import { fetchEscrowDetail, type EscrowDetail } from '@/chain/escrow';
 import {
   estimateDeployPreflight,
@@ -21,10 +21,10 @@ import {
   type DeploySpec,
   type GasPreflight,
 } from '@/chain/gas';
-import { getAllowance, getBalance, getTokenInfo } from '@/chain/erc20';
+import { getAllowance, getBalance, getTokenInfo, supportsPermit } from '@/chain/erc20';
 import { getAddressActivity, type AddressActivity } from '@/chain/identity';
-import { getProjectsForUser, getAllProjects, type RegistryProject } from '@/chain/escrowRegistry';
-import { EscrowState, isTerminalEscrowState } from '@/lib/status';
+import { getProjectsForUser, getAllProjects, type FactoryProject } from '@/chain/escrowFactory';
+import { EscrowState, OnChainMilestoneStatus, isTerminalEscrowState } from '@/lib/status';
 import {
   getProfileCid,
   getUpdateAvailability,
@@ -183,7 +183,7 @@ export function useIpfsJson<T = unknown>(
 /* ------------------------------------------------------------------ escrow */
 
 export function useEscrowProjects(address?: string | null) {
-  return useQuery<RegistryProject[]>({
+  return useQuery<FactoryProject[]>({
     queryKey: queryKeys.escrowProjects(address),
     enabled: Boolean(address),
     staleTime: CHAIN_STALE_MS,
@@ -195,10 +195,48 @@ export function useEscrowProjects(address?: string | null) {
 }
 
 export function useAllEscrowProjects(limit = 50) {
-  return useQuery<RegistryProject[]>({
+  return useQuery<FactoryProject[]>({
     queryKey: queryKeys.escrowProjectsAll(),
     staleTime: CHAIN_STALE_MS,
     queryFn: () => getAllProjects(getReadProvider(), 0, limit),
+  });
+}
+
+/**
+ * Titles for a set of escrow listings, by CID.
+ *
+ * Titles left contract storage when the factory replaced the registry, so a
+ * list of escrows needs their metadata to render names. Doing that per row
+ * would be a gateway fetch per row — the N+1 pattern that made the previous
+ * version slow to load and easy to rate-limit. This is one query for the whole
+ * page, fetching in parallel, keyed on the CID set so it is reused rather than
+ * repeated.
+ *
+ * A CID that will not resolve yields no entry. Callers fall back to the project
+ * id, which is on chain and always available.
+ */
+export function useEscrowTitles(projects?: FactoryProject[]) {
+  const cids = [...new Set((projects ?? []).map((p) => p.metadataCID).filter(Boolean))];
+
+  return useQuery<Record<string, string>>({
+    queryKey: ['escrow-titles', cids.join('|')],
+    enabled: cids.length > 0,
+    staleTime: IPFS_STALE_MS,
+    gcTime: IPFS_STALE_MS,
+    retry: 1,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        cids.map(async (cid) => {
+          try {
+            const metadata = await fetchIpfsJson<{ title?: string }>(cid);
+            return [cid, metadata?.title?.trim() || ''] as const;
+          } catch {
+            return [cid, ''] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries.filter(([, title]) => title));
+    },
   });
 }
 
@@ -241,6 +279,24 @@ export function useTokenAllowance(
     enabled: Boolean(tokenAddress && owner && spender),
     staleTime: 10_000,
     queryFn: () => getAllowance(tokenAddress!, owner!, spender!, getReadProvider()),
+  });
+}
+
+/**
+ * Whether a token can be approved by signature (EIP-2612) instead of a
+ * transaction.
+ *
+ * Worth the one read: it decides whether funding an escrow costs the user two
+ * wallet confirmations or three, and the extra one costs gas. Cached for a long
+ * time because the answer is a property of the token's bytecode and cannot
+ * change.
+ */
+export function useTokenPermitSupport(tokenAddress?: string | null, owner?: string | null) {
+  return useQuery<boolean>({
+    queryKey: ['token-permit', tokenAddress?.toLowerCase(), owner?.toLowerCase()],
+    enabled: Boolean(tokenAddress && owner),
+    staleTime: Infinity,
+    queryFn: () => supportsPermit(tokenAddress!, owner!, getReadProvider()),
   });
 }
 
@@ -439,12 +495,16 @@ export function useEscrowHoldings(address?: string | null, enabled = true) {
 
         if (detail.developer.toLowerCase() === lower) {
           // Only an escrow that actually holds funds can pay anything out.
-          const payable =
-            detail.state === EscrowState.Funded || detail.state === EscrowState.Disputed;
-          if (payable) {
+          if (detail.state === EscrowState.Funded) {
             entry.committedToYou += detail.milestones
-              .filter((milestone) => !milestone.released && !milestone.cancelled)
-              .reduce((sum, milestone) => sum + calculateNetAmount(milestone.amount), 0n);
+              .filter((milestone) => milestone.status === OnChainMilestoneStatus.Pending)
+              // Net, using this escrow's own rate: this figure is what would
+              // land in the developer's wallet, not what the funder deposited.
+              .reduce(
+                (sum, milestone) =>
+                  sum + (milestone.amount - (milestone.amount * detail.feeBps) / 10_000n),
+                0n,
+              );
           }
         }
 

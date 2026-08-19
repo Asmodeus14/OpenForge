@@ -23,7 +23,18 @@ import {
 } from '@/components/trust/Trust';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useTransaction } from '@/hooks/useTransaction';
-import { escrowState, milestoneStatus, projectStatus, EscrowState, ProjectStatus } from '@/lib/status';
+import {
+  escrowState,
+  milestoneStatus,
+  projectStatus,
+  DISPUTE_FROZEN,
+  EscrowState,
+  OnChainMilestoneStatus,
+  ProjectStatus,
+} from '@/lib/status';
+
+/** A deadline comfortably ahead, so showcase pills are not 'overdue'. */
+const FUTURE = BigInt(Math.floor(Date.now() / 1000) + 30 * 86_400);
 import { DEFAULT_CHAIN, calculateFee, calculateNetAmount } from '@/chain/config';
 import { formatTokenAmount } from '@/lib/format';
 
@@ -211,18 +222,26 @@ export default function DesignPage() {
             {[
               EscrowState.Created,
               EscrowState.Funded,
-              EscrowState.Completed,
-              EscrowState.Cancelled,
-              EscrowState.Disputed,
+              EscrowState.Closed,
             ].map((s) => (
               <StatusPill key={s} status={escrowState(s)} />
             ))}
+            {/* Not a state: a dispute is a time-boxed freeze shown beside one. */}
+            <StatusPill status={DISPUTE_FROZEN} />
           </div>
           <div className="flex flex-wrap gap-2">
-            <StatusPill status={milestoneStatus({ released: true, cancelled: false, deadline: 0n })} />
-            <StatusPill status={milestoneStatus({ released: false, cancelled: false, deadline: 0n })} />
-            <StatusPill status={milestoneStatus({ released: false, cancelled: true, deadline: 0n })} />
-            <StatusPill status={milestoneStatus({ released: false, cancelled: false, deadline: 1n })} />
+            <StatusPill
+              status={milestoneStatus({ status: OnChainMilestoneStatus.Released, deadline: FUTURE })}
+            />
+            <StatusPill
+              status={milestoneStatus({ status: OnChainMilestoneStatus.Pending, deadline: FUTURE })}
+            />
+            <StatusPill
+              status={milestoneStatus({ status: OnChainMilestoneStatus.Reclaimed, deadline: 1n })}
+            />
+            <StatusPill
+              status={milestoneStatus({ status: OnChainMilestoneStatus.Pending, deadline: 1n })}
+            />
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge>Neutral</Badge>
@@ -318,9 +337,11 @@ export default function DesignPage() {
               render: (r) => (
                 <StatusPill
                   status={milestoneStatus({
-                    released: r.status === 'released',
-                    cancelled: false,
-                    deadline: r.status === 'overdue' ? 1n : 0n,
+                    status:
+                      r.status === 'released'
+                        ? OnChainMilestoneStatus.Released
+                        : OnChainMilestoneStatus.Pending,
+                    deadline: r.status === 'overdue' ? 1n : FUTURE,
                   })}
                 />
               ),

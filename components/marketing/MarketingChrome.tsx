@@ -57,7 +57,7 @@ export function MarketingFooter() {
             Open the app
           </Link>
           <a
-            href={`${DEFAULT_CHAIN.explorer}/address/${DEFAULT_CHAIN.contracts.escrowRegistry}`}
+            href={`${DEFAULT_CHAIN.explorer}/address/${DEFAULT_CHAIN.contracts.escrowFactory}`}
             target="_blank"
             rel="noreferrer noopener"
             className="text-meta text-fg-secondary hover:text-fg"

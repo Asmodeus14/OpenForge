@@ -95,24 +95,29 @@ export function DisputeDialog({
           placeholder="Describe what was agreed, what was delivered, and where they differ."
         />
 
-        {/* The single most important fact about this action, and the one the
-            contract gives no way to walk back. */}
+        {/* What a dispute is for, stated before what it costs — the intuitive
+            reading, that this freezes everything or decides something, is
+            wrong in both directions. */}
+        <DisclosureNote>
+          A dispute freezes the funder&rsquo;s ability to reclaim overdue milestones for{' '}
+          {formatDuration(PROTOCOL.disputeWindowSeconds)}, then lapses on its own. It does
+          not pause releases: paying the developer is never blocked.
+        </DisclosureNote>
+
         <DisclosureNote tone="caution">
-          A dispute cannot be withdrawn. There is no way back to normal operation — no
-          further milestone can ever be released, and neither side can cancel a single
-          milestone again. The escrow can now only end in one of two ways: everything
-          remaining goes to the funder, or everything remaining goes to the developer.
+          It awards nothing to anybody. There is no arbitrator, so this moves no money and
+          decides no outcome — it buys time to settle between yourselves.
         </DisclosureNote>
 
         <DisclosureNote>
-          This reason is stored on the blockchain permanently and is public. It cannot be
-          edited or deleted afterwards.
+          {role === 'developer'
+            ? 'You can raise one dispute on this escrow, and you can withdraw it early if you reach agreement. Use it when a deadline is close and you need the funder not to withdraw while you settle.'
+            : 'You can raise one dispute on this escrow, and you can withdraw it early. Note it freezes your own ability to reclaim, so it is of most use to the developer.'}
         </DisclosureNote>
 
-        <DisclosureNote tone="caution">
-          {role === 'developer'
-            ? `The funder can end this dispute in their own favour and reclaim the escrow immediately. You cannot claim the funds until ${formatDuration(PROTOCOL.disputeTimeoutSeconds)} have passed. Raising a dispute does not protect your payment.`
-            : `You can end this dispute in your own favour and reclaim the escrow immediately. The developer cannot claim the funds until ${formatDuration(PROTOCOL.disputeTimeoutSeconds)} have passed.`}
+        <DisclosureNote>
+          This reason is emitted to the blockchain permanently and is public. It cannot be
+          edited or deleted afterwards.
         </DisclosureNote>
       </div>
     </Dialog>

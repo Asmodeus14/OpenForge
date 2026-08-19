@@ -27,16 +27,16 @@ import type { DeploySpec } from './gas';
 /**
  * The signing domain.
  *
- * `verifyingContract` is the escrow registry rather than the escrow itself —
- * the escrow does not exist when the developer signs, and the registry is the
- * fixed contract this agreement is scoped to. `chainId` binds the signature to
+ * `verifyingContract` is the escrow factory rather than the escrow itself — the
+ * escrow does not exist when the developer signs, and the factory is the fixed
+ * contract this agreement is scoped to. `chainId` binds the signature to
  * Sepolia, so an approval cannot be replayed against a deployment elsewhere.
  */
 export const APPROVAL_DOMAIN = {
   name: 'OpenForge Escrow',
   version: '1',
   chainId: SEPOLIA_CHAIN_ID,
-  verifyingContract: DEFAULT_CHAIN.contracts.escrowRegistry,
+  verifyingContract: DEFAULT_CHAIN.contracts.escrowFactory,
 } as const;
 
 /**

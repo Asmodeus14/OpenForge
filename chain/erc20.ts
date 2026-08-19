@@ -9,7 +9,7 @@
  * rather than assume 18.
  */
 
-import { Contract, type Provider, type Signer } from 'ethers';
+import { Contract, Signature, type Provider, type Signer } from 'ethers';
 import { getChain, type TokenInfo } from './config';
 
 export const ERC20_ABI = [
@@ -21,8 +21,103 @@ export const ERC20_ABI = [
   'function approve(address spender, uint256 value) returns (bool)',
 ] as const;
 
+/**
+ * EIP-2612. `eip712Domain` is ERC-5267 and is what OpenZeppelin's ERC20Permit
+ * exposes — reading the domain rather than reconstructing it means the
+ * signature cannot be invalidated by guessing the token's `version` string
+ * wrong, which is the usual way permit integrations break.
+ */
+export const ERC20_PERMIT_ABI = [
+  'function nonces(address owner) view returns (uint256)',
+  'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
+] as const;
+
 export function getErc20(address: string, runner: Provider | Signer): Contract {
   return new Contract(address, ERC20_ABI, runner);
+}
+
+export interface PermitSignature {
+  deadline: bigint;
+  v: number;
+  r: string;
+  s: string;
+}
+
+/**
+ * Whether a token can be approved by signature instead of a transaction.
+ *
+ * Worth one read: it is the difference between funding an escrow in two wallet
+ * confirmations and three, and the second of those costs gas.
+ */
+export async function supportsPermit(
+  tokenAddress: string,
+  owner: string,
+  provider: Provider,
+): Promise<boolean> {
+  const token = new Contract(tokenAddress, ERC20_PERMIT_ABI, provider);
+  try {
+    await Promise.all([token.nonces(owner), token.eip712Domain()]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Signs an EIP-2612 approval.
+ *
+ * Costs no gas and broadcasts nothing — the signature is handed to
+ * `fundWithPermit`, which applies the approval and the deposit in one
+ * transaction. The escrow contract swallows a failing permit and falls through
+ * to a plain `fund()`, so a griefer front-running the permit cannot block the
+ * deposit where an allowance already exists.
+ */
+export async function signPermit(
+  signer: Signer,
+  tokenAddress: string,
+  spender: string,
+  value: bigint,
+  /** Signature validity. Short by default: it authorises moving money. */
+  ttlSeconds = 30 * 60,
+): Promise<PermitSignature> {
+  const owner = await signer.getAddress();
+  const provider = signer.provider;
+  if (!provider) throw new Error('This wallet is not connected to a network.');
+
+  const token = new Contract(tokenAddress, ERC20_PERMIT_ABI, provider);
+  const [nonce, domainData] = await Promise.all([
+    token.nonces(owner) as Promise<bigint>,
+    token.eip712Domain() as Promise<{
+      name: string;
+      version: string;
+      chainId: bigint;
+      verifyingContract: string;
+    }>,
+  ]);
+
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + ttlSeconds);
+
+  const signature = await signer.signTypedData(
+    {
+      name: domainData.name,
+      version: domainData.version,
+      chainId: domainData.chainId,
+      verifyingContract: domainData.verifyingContract,
+    },
+    {
+      Permit: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+    },
+    { owner, spender, value, nonce, deadline },
+  );
+
+  const { v, r, s } = Signature.from(signature);
+  return { deadline, v, r, s };
 }
 
 export class UnreadableTokenError extends Error {

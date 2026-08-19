@@ -28,7 +28,8 @@ remote is named `OpenForge` but its directory is `OpenForge-Frontend`.
 | Contract build tooling | **none** — Remix only | Hardhat, solc pinned 0.8.24 |
 | Contract tests | **zero** | 29 passing |
 | Contract optimizer | **disabled** | enabled, `runs: 200` |
-| Contract deploy script | **none** | `scripts/deploy.js`, dry-run verified |
+| Contract deploy script | **none** | `scripts/deploy.js`, used for the live deployment |
+| Contracts deployed | v1, Remix, optimizer off | v2 on Sepolia, reproducible build |
 | OpenZeppelin | 3 versions vendored in one build | pinned 5.0.2 + lockfile |
 
 The contracts had no `package.json`, no test framework, no deployment script
@@ -44,6 +45,12 @@ frontend embeds had to be byte-compared against a Remix artifact by hand.
 | Deploy **and** register | 2,855,175 + a second transaction | **1,814,955** |
 | Approve | 47,276 (Sepolia) | folded into `fundWithPermit` |
 | Transactions to start a funded project | **4** | **2** |
+
+The frontend now realises that last row rather than only claiming it:
+`createEscrow` replaces deploy-then-register, and `signPermit` +
+`fundWithPermit` replace approve-then-deposit for any EIP-2612 token. The
+signature step is shown to the user as a step, labelled as costing no gas,
+rather than being folded invisibly into a transaction.
 
 Full table and the storage-layout reasoning: `OpenForge-Contracts/docs/GAS_OPTIMIZATION.md`.
 
@@ -84,7 +91,10 @@ Full table and the storage-layout reasoning: `OpenForge-Contracts/docs/GAS_OPTIM
 
 ### P1 — outstanding
 
-- **The frontend still points at the v1 contracts.** Nothing is deployed yet.
+- **The v2 contracts are not verified on Etherscan.** `ETHERSCAN_API_KEY` is
+  still the `.env.example` placeholder. A contract that asks people to lock
+  funds in it should be readable by them; see
+  `OpenForge-Contracts/deployments/sepolia.md` for the two commands.
 - **`import * as Icons from 'lucide-react'`** in `components/ui/Badge.tsx`
   defeats tree-shaking on a 39 MB dependency, in the shared shell chunk for
   every application route. `lib/status.ts` stores icon names as strings;
