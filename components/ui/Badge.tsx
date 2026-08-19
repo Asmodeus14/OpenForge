@@ -1,7 +1,6 @@
 import { createElement, type ReactNode } from 'react';
-import * as Icons from 'lucide-react';
-import type { LucideProps } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { STATUS_ICONS } from '@/components/ui/statusIcons';
 import type { StatusDescriptor, Tone } from '@/lib/status';
 
 const TONES: Record<Tone, string> = {
@@ -39,13 +38,6 @@ export function Badge({
   );
 }
 
-function resolveIcon(name: string) {
-  const icon = (Icons as unknown as Record<string, unknown>)[name];
-  return typeof icon === 'function'
-    ? (icon as React.ComponentType<LucideProps>)
-    : Icons.Circle;
-}
-
 /**
  * Renders a status from `lib/status`.
  *
@@ -68,7 +60,7 @@ export function StatusPill({
       className={className}
       icon={
         showIcon
-          ? createElement(resolveIcon(status.icon), {
+          ? createElement(STATUS_ICONS[status.icon], {
               className: 'size-3 shrink-0',
               'aria-hidden': true,
             })

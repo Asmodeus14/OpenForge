@@ -3,6 +3,7 @@
 import { Avatar } from '@/components/ui/Avatar';
 import { AddressDisplay } from '@/components/trust/Trust';
 import { useProfile } from '@/hooks/queries';
+import { useProfileSeed } from '@/components/trust/ProfileSeed';
 import { cn } from '@/lib/cn';
 import { shortenAddress } from '@/lib/format';
 
@@ -36,7 +37,22 @@ export interface DisplayName {
 }
 
 export function useDisplayName(address?: string | null, chars = 4): DisplayName {
-  const profile = useProfile(address);
+  // A server render may already have resolved this address, in which case the
+  // name is known before the first paint and there is nothing to fetch.
+  const seed = useProfileSeed(address);
+  const seeded = seed !== undefined;
+
+  const profile = useProfile(address, { enabled: !seeded });
+
+  if (seeded) {
+    return {
+      name: seed?.name ?? null,
+      avatarUrl: seed?.avatarUrl,
+      label: seed?.name ?? shortenAddress(address, chars),
+      isLoading: false,
+    };
+  }
+
   const name = profile.data?.metadata.name?.trim() || null;
 
   return {

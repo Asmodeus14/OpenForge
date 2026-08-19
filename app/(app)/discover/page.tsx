@@ -4,7 +4,9 @@ import { Compass, HandCoins, Plus } from 'lucide-react';
 import { Page, PageHeader } from '@/components/ui/Layout';
 import { EmptyState } from '@/components/ui/States';
 import { buttonClasses } from '@/components/ui/buttonStyles';
+import { ProfileSeedProvider } from '@/components/trust/ProfileSeed';
 import { loadRecentProjects } from '@/lib/server/projects';
+import { loadProfileSeeds } from '@/lib/server/profiles';
 import { DiscoverList } from './DiscoverList';
 
 export const metadata: Metadata = {
@@ -21,7 +23,13 @@ export const revalidate = 30;
 export default async function DiscoverPage() {
   const { projects, total } = await loadRecentProjects();
 
+  // One `Person` per card, up to 24 of them. Resolved here and deduplicated,
+  // so a builder with several projects costs one lookup rather than one per
+  // card — and none of them happen in the browser.
+  const seeds = await loadProfileSeeds(projects.map((project) => project.builder));
+
   return (
+    <ProfileSeedProvider seeds={seeds}>
     <Page>
       <PageHeader
         title="Discover"
@@ -60,5 +68,6 @@ export default async function DiscoverPage() {
         <DiscoverList projects={projects} total={total} />
       )}
     </Page>
+    </ProfileSeedProvider>
   );
 }

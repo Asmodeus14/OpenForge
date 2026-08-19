@@ -11,7 +11,9 @@ import {
   FundingProgress,
   FundingProgressLegend,
 } from '@/components/escrow/FundingProgress';
+import { ProfileSeedProvider } from '@/components/trust/ProfileSeed';
 import { loadFunding } from '@/lib/server/escrows';
+import { loadProfileSeeds } from '@/lib/server/profiles';
 import { formatDate, formatTokenAmount } from '@/lib/format';
 import { escrowState } from '@/lib/status';
 
@@ -42,7 +44,14 @@ export default async function FundingPage() {
     new Set([...Object.keys(heldByToken), ...Object.keys(releasedByToken)]),
   );
 
+  // Two people per row. Resolved here, deduplicated, rather than by each
+  // `Person` on the client — see `loadProfileSeeds`.
+  const seeds = await loadProfileSeeds(
+    projects.flatMap(({ listing }) => [listing.funder, listing.developer]),
+  );
+
   return (
+    <ProfileSeedProvider seeds={seeds}>
     <Page>
       <PageHeader
         title="Funding"
@@ -187,5 +196,6 @@ export default async function FundingPage() {
 
       <div className="pb-16" />
     </Page>
+    </ProfileSeedProvider>
   );
 }

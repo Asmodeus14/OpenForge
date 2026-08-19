@@ -100,10 +100,15 @@ export interface ResolvedProfile {
  * Returns `null` (not an error) when the wallet simply has no profile — that
  * is an ordinary state deserving an empty state, not an error state.
  */
-export function useProfile(address?: string | null) {
+export function useProfile(
+  address?: string | null,
+  /** `enabled: false` skips the lookup entirely — used when a server render
+   *  already resolved this address. See `components/trust/ProfileSeed`. */
+  options?: { enabled?: boolean },
+) {
   return useQuery<ResolvedProfile | null>({
     queryKey: queryKeys.profile(address),
-    enabled: Boolean(address),
+    enabled: Boolean(address) && (options?.enabled ?? true),
     staleTime: CHAIN_STALE_MS,
     queryFn: async () => {
       const cid = await getProfileCid(address!, getReadProvider());

@@ -11,11 +11,32 @@
 
 export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
+/**
+ * The icons a status may use.
+ *
+ * Closed on purpose. These names are resolved to components by
+ * `components/ui/statusIcons.ts`, which must map every one of them — so
+ * adding a name here without adding the import there fails to compile,
+ * rather than silently rendering a fallback dot in production.
+ */
+export type StatusIconName =
+  | 'CalendarClock'
+  | 'Circle'
+  | 'CircleCheck'
+  | 'CircleDollarSign'
+  | 'CircleHelp'
+  | 'CircleSlash'
+  | 'CircleX'
+  | 'Clock'
+  | 'PencilLine'
+  | 'ShieldCheck'
+  | 'TriangleAlert';
+
 export interface StatusDescriptor {
   label: string;
   tone: Tone;
-  /** lucide-react icon name, resolved by the Badge/StatusPill component. */
-  icon: string;
+  /** Resolved to a component by `components/ui/statusIcons.ts`. */
+  icon: StatusIconName;
   /** Plain-language explanation of what this state means for the user. */
   description: string;
 }

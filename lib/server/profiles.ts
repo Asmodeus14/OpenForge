@@ -41,3 +41,61 @@ export async function loadProfile(address: string): Promise<LoadedProfile | null
     avatarUrl: metadata.avatar?.cid ? ipfsUrl(metadata.avatar.cid) : undefined,
   };
 }
+
+/* ------------------------------------------------------------------- seeds */
+
+/** What `Person` actually renders. Deliberately not the whole profile. */
+export interface ProfileSeed {
+  name: string | null;
+  avatarUrl?: string;
+}
+
+/** Keyed on the lowercased address, since callers vary in casing. */
+export type ProfileSeedMap = Record<string, ProfileSeed | null>;
+
+/**
+ * Resolves many profiles at once, for pages that already render a list of
+ * addresses on the server.
+ *
+ * `Person` resolves each address it is given through react-query, which is
+ * right for a page that discovers addresses as it goes but wasteful for one
+ * that knew all of them before it rendered: `/funding` shows two people per
+ * row, so a hundred escrows meant two hundred client-side lookups, each an
+ * IPFS fetch, on a page that was otherwise fully server-rendered. The RPC half
+ * was already batched by the shared provider; the gateway fetches were not.
+ *
+ * Addresses are deduplicated first — the same funder across ten rows is one
+ * lookup, not ten.
+ *
+ * An address that fails to resolve is **omitted** rather than stored as null.
+ * Null is meaningful here: it means "resolved, and this wallet has no
+ * profile", which stops the client re-querying. Omission lets the client
+ * retry, so a gateway hiccup during the server render degrades to the old
+ * behaviour instead of showing a bare address permanently.
+ */
+export async function loadProfileSeeds(
+  addresses: readonly (string | null | undefined)[],
+): Promise<ProfileSeedMap> {
+  const unique = Array.from(
+    new Set(addresses.filter((a): a is string => Boolean(a)).map((a) => a.toLowerCase())),
+  );
+
+  const resolved = await Promise.all(
+    unique.map(async (address) => {
+      try {
+        const profile = await loadProfile(address);
+        const seed: ProfileSeed | null = profile
+          ? {
+              name: profile.metadata.name?.trim() || null,
+              avatarUrl: profile.avatarUrl,
+            }
+          : null;
+        return [address, seed] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return Object.fromEntries(resolved.filter((entry) => entry !== null));
+}
