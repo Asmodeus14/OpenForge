@@ -17,15 +17,63 @@ const PINATA_JWT = process.env.PINATA_JWT;
 const PINATA_API_KEY = process.env.PINATA_API_KEY;
 const PINATA_API_SECRET = process.env.PINATA_API_SECRET;
 
-function authHeaders(): Record<string, string> | null {
-  if (PINATA_JWT) return { Authorization: `Bearer ${PINATA_JWT}` };
-  if (PINATA_API_KEY && PINATA_API_SECRET) {
-    return {
-      pinata_api_key: PINATA_API_KEY,
-      pinata_secret_api_key: PINATA_API_SECRET,
-    };
+type Credential = { label: string; headers: Record<string, string> };
+
+/**
+ * Every configured credential, in preference order.
+ *
+ * Deliberately a list rather than a single choice: a JWT that has been revoked
+ * still *looks* configured, and preferring it unconditionally makes a working
+ * key/secret pair unreachable. Every pin then fails with a message that, by
+ * design, cannot say which credential was at fault.
+ */
+function authCandidates(): Credential[] {
+  const candidates: Credential[] = [];
+  if (PINATA_JWT) {
+    candidates.push({ label: 'JWT', headers: { Authorization: `Bearer ${PINATA_JWT}` } });
   }
-  return null;
+  if (PINATA_API_KEY && PINATA_API_SECRET) {
+    candidates.push({
+      label: 'API key/secret',
+      headers: {
+        pinata_api_key: PINATA_API_KEY,
+        pinata_secret_api_key: PINATA_API_SECRET,
+      },
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Posts to Pinata, moving to the next credential if one is rejected.
+ *
+ * `buildRequest` is called per attempt so the body is constructed fresh rather
+ * than reused across fetches. Only an authentication failure is retried — a
+ * 413 or a Pinata outage means the next credential would fail identically.
+ *
+ * The status is logged server-side because the response to the browser
+ * deliberately withholds it; without this, a revoked key is indistinguishable
+ * from IPFS being down.
+ */
+async function pinataFetch(
+  url: string,
+  candidates: Credential[],
+  buildRequest: (headers: Record<string, string>) => RequestInit,
+): Promise<Response> {
+  let lastResponse: Response | undefined;
+
+  for (const candidate of candidates) {
+    const response = await fetch(url, buildRequest(candidate.headers));
+    if (response.ok) return response;
+
+    console.error(
+      `[api/ipfs] Pinata rejected the ${candidate.label} credential: ${response.status}`,
+    );
+    if (response.status !== 401 && response.status !== 403) return response;
+    lastResponse = response;
+  }
+
+  return lastResponse!;
 }
 
 /** Never leak upstream provider detail or credentials into the response. */
@@ -34,8 +82,8 @@ function failure(message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
-  const headers = authHeaders();
-  if (!headers) {
+  const candidates = authCandidates();
+  if (candidates.length === 0) {
     return failure(
       'Uploads are unavailable: this deployment has no IPFS pinning credentials configured.',
       503,
@@ -57,12 +105,14 @@ export async function POST(request: NextRequest) {
         return failure('Files must be 5 MB or smaller.', 413);
       }
 
-      const outgoing = new FormData();
-      outgoing.append('file', file, file.name);
-
-      const response = await fetch(
+      const response = await pinataFetch(
         'https://api.pinata.cloud/pinning/pinFileToIPFS',
-        { method: 'POST', headers, body: outgoing },
+        candidates,
+        (headers) => {
+          const outgoing = new FormData();
+          outgoing.append('file', file, file.name);
+          return { method: 'POST', headers, body: outgoing };
+        },
       );
 
       if (!response.ok) {
@@ -84,15 +134,19 @@ export async function POST(request: NextRequest) {
       return failure('No content was included in the request.', 400);
     }
 
-    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        body.name
-          ? { pinataMetadata: { name: body.name }, pinataContent: body.content }
-          : body.content,
-      ),
-    });
+    const response = await pinataFetch(
+      'https://api.pinata.cloud/pinning/pinJSONToIPFS',
+      candidates,
+      (headers) => ({
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          body.name
+            ? { pinataMetadata: { name: body.name }, pinataContent: body.content }
+            : body.content,
+        ),
+      }),
+    );
 
     if (!response.ok) {
       return failure('The content could not be stored on IPFS. Nothing was saved.', 502);
