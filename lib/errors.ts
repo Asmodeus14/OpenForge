@@ -151,6 +151,29 @@ export function parseError(error: unknown, context?: string): ParsedError {
   const lower = raw.toLowerCase();
   const title = context ?? 'Something went wrong';
 
+  // --- A failure reported by the messaging backend.
+  //
+  //     Matched by name for the same reason as below, and handled just as
+  //     early: nothing here touched the chain, so every piece of transaction
+  //     copy further down is wrong. Signing in to messaging was being reported
+  //     as "check the transaction on the block explorer" — advice to go
+  //     looking for something that was never sent.
+  //
+  //     The message is passed through unchanged because `ChatApiError` already
+  //     carries either the server's own wording or a specific description of
+  //     why the request never left.
+  if ((error as { name?: string })?.name === 'ChatApiError') {
+    const status = (error as { status?: number }).status;
+    return {
+      kind: 'not-sent',
+      title: context ?? 'The messaging server rejected that',
+      message: raw,
+      // 401 and 403 mean sign in again, not try again.
+      retryable: status !== 401 && status !== 403,
+      raw,
+    };
+  }
+
   // --- A token that will not identify itself.
   //
   //     Matched by name rather than by importing the class, so this module

@@ -46,6 +46,26 @@ export function isAuthError(error: unknown): boolean {
   return error instanceof ChatApiError && (error.status === 401 || error.status === 403);
 }
 
+/**
+ * Works out why a request never got a response, and says which it was.
+ *
+ * A `no-cors` probe is opaque — its status cannot be read — but whether it
+ * *resolves* is the one bit needed here. Resolving proves the host answered,
+ * which means the server is awake and the real request was discarded by the
+ * browser for lack of an `Access-Control-Allow-Origin` header naming this
+ * origin. Rejecting means nothing answered at all.
+ */
+async function diagnoseUnreachable(): Promise<string> {
+  try {
+    await fetch(`${BASE}/health`, { mode: 'no-cors', cache: 'no-store' });
+  } catch {
+    return 'The messaging server did not respond. It sleeps when idle and can take up to a minute to wake — if this persists, it is offline.';
+  }
+
+  const origin = typeof window === 'undefined' ? 'this site' : window.location.origin;
+  return `The messaging server is running but refused a request from ${origin}, so the browser discarded the response. Its CORS_ORIGIN setting has to list ${origin}.`;
+}
+
 async function request<T>(
   path: string,
   options: { method?: string; token?: string | null; body?: unknown } = {},
@@ -65,13 +85,12 @@ async function request<T>(
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
   } catch {
-    // The backend runs on a free tier that sleeps; a cold start looks
-    // identical to being offline, and saying so is more useful than "failed
-    // to fetch".
-    throw new ChatApiError(
-      0,
-      'The messaging server did not respond. It sleeps when idle and can take up to a minute to wake.',
-    );
+    // `fetch` rejects with the same opaque TypeError whether the server is
+    // asleep, unreachable, or awake and refusing this origin. Guessing "it is
+    // asleep" reads as an explanation, so a CORS misconfiguration presented
+    // itself as a cold start and stayed hidden. Ask the server directly
+    // instead.
+    throw new ChatApiError(0, await diagnoseUnreachable());
   }
 
   if (response.status === 429) {
