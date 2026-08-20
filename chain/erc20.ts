@@ -133,10 +133,21 @@ export class UnreadableTokenError extends Error {
 }
 
 /**
+ * Symbol, name and decimals are fixed at deployment for every ERC20 worth
+ * escrowing, so an address only has to be read once per process.
+ */
+const tokenInfoCache = new Map<string, TokenInfo>();
+
+/**
  * Resolves symbol/name/decimals for a token address.
  *
  * Known tokens short-circuit to the config table — no RPC call, and no
  * dependency on the token implementing optional metadata methods.
+ *
+ * For everything else the three reads are issued together. Awaiting `decimals`
+ * before starting `symbol`/`name` made this two round trips, on top of the one
+ * that had to resolve the token address in the first place — three sequential
+ * trips to render a single escrow row.
  */
 export async function getTokenInfo(
   address: string,
@@ -148,31 +159,35 @@ export async function getTokenInfo(
   );
   if (known) return known;
 
+  const cacheKey = `${chainId}:${address.toLowerCase()}`;
+  const cached = tokenInfoCache.get(cacheKey);
+  if (cached) return cached;
+
   const token = getErc20(address, provider);
 
-  let decimals: number;
-  try {
-    decimals = Number(await token.decimals());
-  } catch {
-    throw new UnreadableTokenError(address);
-  }
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
-    throw new UnreadableTokenError(address);
-  }
-
   // Symbol and name are optional in ERC20; an unnamed token is usable, an
-  // undecimalled one is not.
-  const [symbol, name] = await Promise.all([
+  // undecimalled one is not — hence the bare read for decimals and the
+  // tolerant ones either side of it.
+  const [rawDecimals, symbol, name] = await Promise.all([
+    (token.decimals() as Promise<bigint>).catch(() => null),
     token.symbol().catch(() => 'Unknown'),
     token.name().catch(() => 'Unknown token'),
   ]);
 
-  return {
+  if (rawDecimals === null) throw new UnreadableTokenError(address);
+  const decimals = Number(rawDecimals);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+    throw new UnreadableTokenError(address);
+  }
+
+  const info: TokenInfo = {
     address: address as `0x${string}`,
     symbol: String(symbol),
     name: String(name),
     decimals,
   };
+  tokenInfoCache.set(cacheKey, info);
+  return info;
 }
 
 export async function getAllowance(
