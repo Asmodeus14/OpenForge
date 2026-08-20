@@ -7,9 +7,9 @@ on this page, the things a security policy usually implies and this project
 does not have:
 
 - **The contracts have not been audited.** By anyone. They were written for
-  this project and reviewed only by the people who wrote them.
-- **The contracts have no test suite**, and were compiled with the optimiser
-  disabled.
+  this project and reviewed only by the people who wrote them. There is a test
+  suite — 29 tests, named after the failures they prevent — but tests are
+  evidence that known cases behave, not that unknown ones do.
 - **There is no arbitration, recovery or upgrade path.** A contract that holds
   tokens incorrectly holds them permanently. There is no admin key that can
   intervene, which is a deliberate property and also means nobody can help you.
@@ -59,11 +59,20 @@ undiscovered:
 These are real, understood, and either accepted for a prototype or not yet
 fixed. They are listed so that nobody has to rediscover them.
 
-**Escrow power is asymmetric, by design and by accident.** The funder can
-cancel the project or resolve a dispute in their own favour immediately. The
-developer must wait 30 days to resolve one in theirs. The interface discloses
-this at the point of decision, but it remains an asymmetry a developer must
-accept before starting work.
+**Releasing is discretionary, and there is no arbitrator.** The funder decides
+whether a milestone is paid. If they simply never release, the developer has no
+on-chain claim — once the deadline passes, the funder may reclaim that
+milestone, and long after the last deadline anyone may sweep what is left back
+to them. Nothing on chain decides who was right. A developer is trusting the
+funder's good faith; the escrow guarantees the money exists and cannot be
+pulled back from *in-date* work, which is less than it sounds like and more
+than an unsecured promise.
+
+This is the deliberate v2 design. It replaced a v1 in which the funder could
+cancel outright and take back everything unreleased at any moment, and in which
+disputes could be resolved by either party to steal the whole balance. Those
+contracts are still live at their old addresses and are documented in
+[`OpenForge-Contracts/docs/SECURITY.md`](https://github.com/Asmodeus14/OpenForge-Contracts/blob/master/docs/SECURITY.md).
 
 **The fee recipient is a fixed address baked into the factory.** It cannot be
 changed after deployment.
