@@ -271,8 +271,8 @@ export function rejectJoinRequest(token: string, roomId: string, requestId: stri
 /**
  * Loads a page of history.
  *
- * Hits the route in `rooms.js` — see the note in `types.ts` about why the one
- * in `messages.js` is unreachable. Results arrive newest-first and are
+ * Served by `routes/messages.js` — see the note in `types.ts` about the
+ * duplicate that used to shadow it. Results arrive newest-first and are
  * reversed here so callers always work in reading order.
  */
 export async function listMessages(

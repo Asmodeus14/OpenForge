@@ -4,12 +4,13 @@
  * These mirror what the backend actually returns, in its own snake_case,
  * rather than an idealised shape. Two details worth knowing:
  *
- *  - `GET /api/rooms/:roomId/messages` is served by `routes/rooms.js`, not
- *    `routes/messages.js`. Express matches `/api/rooms` first, so the route
- *    in `messages.js` is unreachable. The reachable one paginates by
- *    limit/offset and returns NO `like_count` or `liked_by` — those arrive
- *    only on the socket's `new_message` event. Code written against the
- *    unreachable route would show undefined counts on every historic message.
+ *  - `GET /api/rooms/:roomId/messages` is served by `routes/messages.js`. It
+ *    used to be shadowed by a duplicate in `routes/rooms.js` that returned no
+ *    reaction data, so historic messages lost the likes they had shown when
+ *    they arrived over the socket. The duplicate is gone; the surviving route
+ *    keeps limit/offset pagination and now reports `like_count`, `liked_by`
+ *    and `is_liked_by_me` on history as well. Both fields stay optional here,
+ *    because a deployed backend may still be serving the old route.
  *
  *  - Messages come back newest-first (`ORDER BY created_at DESC`), so they
  *    are reversed on read for display.
@@ -54,9 +55,10 @@ export interface ChatMessage {
   created_at: string;
   updated_at?: string | null;
   is_edited?: boolean;
-  /** Only populated on socket events — see the note above. */
   like_count?: number;
+  /** Every wallet that reacted, not just this one. */
   liked_by?: string[];
+  is_liked_by_me?: boolean;
 }
 
 /** An invitation to a private room, addressed to a wallet address. */
