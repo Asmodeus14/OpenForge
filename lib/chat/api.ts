@@ -46,24 +46,45 @@ export function isAuthError(error: unknown): boolean {
   return error instanceof ChatApiError && (error.status === 401 || error.status === 403);
 }
 
+/** Long enough to clear a slow response, far short of a free-tier cold start. */
+const PROBE_TIMEOUT_MS = 6_000;
+
 /**
- * Works out why a request never got a response, and says which it was.
+ * Works out why a request never got a response, and says which of three things
+ * it was.
  *
  * A `no-cors` probe is opaque — its status cannot be read — but whether it
- * *resolves* is the one bit needed here. Resolving proves the host answered,
- * which means the server is awake and the real request was discarded by the
- * browser for lack of an `Access-Control-Allow-Origin` header naming this
- * origin. Rejecting means nothing answered at all.
+ * resolves is the bit that matters. Resolving proves the host answered, so the
+ * server is awake and the browser discarded the real response for want of an
+ * `Access-Control-Allow-Origin` header naming this origin.
+ *
+ * A rejection is ambiguous on its own, which is the flaw in the version this
+ * replaces: a sleeping instance and a wrong hostname both reject, and it
+ * reported both as "did not respond, it sleeps when idle" — reassuring, and
+ * wrong half the time. Timing separates them. A host that is not there refuses
+ * or fails DNS almost immediately; one that is waking holds the connection
+ * open, so hitting the timeout is itself the evidence of a cold start.
  */
 async function diagnoseUnreachable(): Promise<string> {
-  try {
-    await fetch(`${BASE}/health`, { mode: 'no-cors', cache: 'no-store' });
-  } catch {
-    return 'The messaging server did not respond. It sleeps when idle and can take up to a minute to wake — if this persists, it is offline.';
-  }
-
   const origin = typeof window === 'undefined' ? 'this site' : window.location.origin;
-  return `The messaging server is running but refused a request from ${origin}, so the browser discarded the response. Its CORS_ORIGIN setting has to list ${origin}.`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+
+  try {
+    await fetch(`${BASE}/health`, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return `The messaging server is running, but it refused a request from ${origin} and the browser discarded the response. Its CORS_ORIGIN setting has to list ${origin}.`;
+  } catch {
+    if (controller.signal.aborted) {
+      return 'The messaging server is taking a long time to answer. It sleeps when idle and can need up to a minute to wake — wait a moment and try again.';
+    }
+    return `The messaging server at ${BASE} could not be reached at all. Check that the address is right and that the service is running.`;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function request<T>(

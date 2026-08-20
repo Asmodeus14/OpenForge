@@ -33,6 +33,27 @@ export interface ParsedError {
   raw?: string;
 }
 
+/** Used when the caller named no context and no branch chose a better heading. */
+const GENERIC_TITLE = 'Something went wrong';
+
+/**
+ * Whether a value has already been through `parseError`.
+ *
+ * Structural, because `ParsedError` is a plain object rather than a class —
+ * it crosses the server/client boundary and travels through React state, and
+ * a class instance survives neither intact.
+ */
+export function isParsedError(value: unknown): value is ParsedError {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<ParsedError>;
+  return (
+    typeof candidate.kind === 'string' &&
+    typeof candidate.title === 'string' &&
+    typeof candidate.message === 'string' &&
+    typeof candidate.retryable === 'boolean'
+  );
+}
+
 /**
  * Contract revert reasons → human copy.
  *
@@ -146,10 +167,32 @@ function matchRevertReason(raw: string): string | undefined {
  * outcome, not just that "an error occurred".
  */
 export function parseError(error: unknown, context?: string): ParsedError {
+  // --- Already classified.
+  //
+  //     Parsing is not idempotent unless this is here, and the result of a
+  //     second pass is strictly worse: the first pass produces a ParsedError,
+  //     whose `.message` is human copy carrying none of the markers the
+  //     branches below match on, so everything lands in `unknown` and the
+  //     specific diagnosis is replaced by "check the transaction on the block
+  //     explorer".
+  //
+  //     Which happened on every screen that parses in a hook and then hands
+  //     the result to `ErrorState`, since `ErrorState` parses what it is
+  //     given. `context` still applies, because the outer caller names the
+  //     outcome more precisely than the inner one.
+  //     The existing title is kept whenever it says anything: a branch that
+  //     chose "Cancelled" knows more about what happened than a screen-level
+  //     label like "You were not signed in". Only the generic fallback defers
+  //     to the caller's context.
+  if (isParsedError(error)) {
+    const titleIsGeneric = !error.title || error.title === GENERIC_TITLE;
+    return context && titleIsGeneric ? { ...error, title: context } : error;
+  }
+
   const raw = extractRawMessage(error);
   const code = errorCode(error);
   const lower = raw.toLowerCase();
-  const title = context ?? 'Something went wrong';
+  const title = context ?? GENERIC_TITLE;
 
   // --- A failure reported by the messaging backend.
   //
