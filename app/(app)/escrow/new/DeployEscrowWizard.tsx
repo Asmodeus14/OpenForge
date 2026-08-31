@@ -329,6 +329,37 @@ export function DeployEscrowWizard({
   const permit = useTokenPermitSupport(token?.address, wallet.account);
 
   /**
+   * The sequence the deploy will actually produce.
+   *
+   * Derived from the same two facts `createEscrowIntent` branches on, so the
+   * summary promises exactly what the signing dialog will then show. This note
+   * used to hardcode "four wallet confirmations: deploy, register, approve,
+   * deposit" — the shape of the flow before the factory folded deploy and
+   * register together and EIP-2612 folded approve and deposit. It stayed on
+   * screen, beside a correct fee and a correct total, long after it had stopped
+   * being true.
+   *
+   * `undefined` while the permit read is in flight or the token is not yet
+   * chosen: the count is genuinely unknown then, and guessing it is what caused
+   * the original bug.
+   */
+  const plan = useMemo(() => {
+    if (!token || permit.data === undefined) return null;
+
+    // Only ever true on a retry against an escrow that already deployed — a
+    // fresh one has no allowance of its own.
+    const alreadyApproved =
+      allowance.data !== undefined && total > 0n && allowance.data >= total;
+    const usePermit = permit.data && !alreadyApproved;
+
+    return {
+      // Non-signature steps, matching the intent's own `txCount`.
+      transactions: usePermit || alreadyApproved ? 2 : 3,
+      signature: usePermit,
+    };
+  }, [token, permit.data, allowance.data, total]);
+
+  /**
    * Pinning runs before any wallet prompt, so it gets its own state.
    *
    * The milestone descriptions are a constructor argument now — by way of the
@@ -819,8 +850,30 @@ export function DeployEscrowWizard({
           )}
 
           <DisclosureNote className="mt-5">
-            Creating this escrow takes four wallet confirmations: deploy the contract, list
-            it in the registry, approve the tokens, then deposit them.
+            {plan === null ? (
+              <>
+                Creating this escrow deploys the contract and then deposits the tokens. The
+                exact number of wallet prompts depends on the token, and is listed in full
+                before anything is signed.
+              </>
+            ) : plan.signature ? (
+              <>
+                Creating this escrow takes {plan.transactions} transactions and one
+                signature: deploy the contract, authorise the tokens, then deposit them.
+                Only the transactions cost a network fee — the signature is free.
+              </>
+            ) : plan.transactions === 3 ? (
+              <>
+                Creating this escrow takes three wallet confirmations: deploy the contract,
+                approve the tokens, then deposit them. This token cannot be approved by
+                signature, so the approval is a transaction of its own.
+              </>
+            ) : (
+              <>
+                Creating this escrow takes two wallet confirmations: deploy the contract,
+                then deposit the tokens.
+              </>
+            )}
           </DisclosureNote>
 
           <DisclosureNote className="mt-3" tone="caution">

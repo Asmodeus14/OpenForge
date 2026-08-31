@@ -33,10 +33,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 onClick={onNavigate}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group flex items-center gap-2.5 rounded-md px-2.5 py-1.5',
+                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2',
                   'text-secondary transition-colors duration-[var(--dur-fast)]',
                   active
-                    ? 'bg-subtle font-medium text-fg'
+                    ? // A raised chip rather than a recessed tint. The active
+                      // row is the one thing on this rail that should read as
+                      // sitting above the surface, and the lit rim is the same
+                      // one the panels and the glass chrome carry.
+                      'of-panel font-medium text-fg'
                     : 'text-fg-secondary hover:bg-subtle hover:text-fg',
                 )}
               >

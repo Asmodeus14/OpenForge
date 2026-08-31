@@ -174,12 +174,31 @@ function CommandPalette() {
   return (
     <RadixDialog.Root open={isOpen} onOpenChange={(open) => !open && close()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-[of-fade-in_var(--dur-base)_var(--ease-out)] dark:bg-black/60" />
+        {/* The backdrop fades, at the shortest duration in the system. It is
+            peripheral — the eye is on the input — and a dim that snaps on is
+            harsher than one that takes 100ms. */}
+        <RadixDialog.Overlay
+          className={cn(
+            'fixed inset-0 z-[var(--z-overlay)] bg-black/40 backdrop-blur-[2px] dark:bg-black/60',
+            'data-[state=open]:animate-[of-fade-in_var(--dur-instant)_var(--ease-out)]',
+            'data-[state=closed]:animate-[of-fade-out_var(--dur-instant)_var(--ease-out)]',
+          )}
+        />
+        {/* The panel itself does not animate, in either direction.
+
+            This is reached by ⌘K, dozens to hundreds of times a day, and it is
+            the one surface in the product where that is true. An animation the
+            user out-runs stops reading as polish and starts reading as lag:
+            they have already typed two characters before a 220ms drop-in has
+            finished landing, and the field they are typing into is still
+            moving. Raycast ships no open animation for exactly this reason.
+
+            Everything else here keeps its motion. This is not a rule about
+            overlays; it is a rule about how often one is opened. */}
         <RadixDialog.Content
           className={cn(
             'fixed left-1/2 top-[14vh] z-[var(--z-overlay)] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2',
             'overflow-hidden rounded-xl border border-line bg-elevated shadow-[var(--shadow-overlay)]',
-            'data-[state=open]:animate-[of-drop-in_var(--dur-base)_var(--ease-out)]',
           )}
         >
           <VisuallyHidden>

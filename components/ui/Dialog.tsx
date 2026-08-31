@@ -45,7 +45,13 @@ export function Dialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={dismissible ? onOpenChange : undefined}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-[of-fade-in_var(--dur-base)_var(--ease-out)] dark:bg-black/60" />
+        <RadixDialog.Overlay
+          className={cn(
+            'fixed inset-0 z-[var(--z-overlay)] bg-black/40 backdrop-blur-[2px] dark:bg-black/60',
+            'data-[state=open]:animate-[of-fade-in_var(--dur-base)_var(--ease-out)]',
+            'data-[state=closed]:animate-[of-fade-out_var(--dur-fast)_var(--ease-out)]',
+          )}
+        />
         <RadixDialog.Content
           onEscapeKeyDown={(event) => !dismissible && event.preventDefault()}
           onPointerDownOutside={(event) => !dismissible && event.preventDefault()}
@@ -55,6 +61,7 @@ export function Dialog({
             'flex max-h-[calc(100dvh-3rem)] flex-col overflow-hidden',
             'rounded-xl border border-line bg-elevated shadow-[var(--shadow-overlay)]',
             'data-[state=open]:animate-[of-overlay-in_var(--dur-base)_var(--ease-out)]',
+            'data-[state=closed]:animate-[of-overlay-out_var(--dur-fast)_var(--ease-out)]',
             SIZES[size],
           )}
         >

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { WalletProvider } from '@/components/wallet/WalletProvider';
+import { Toaster } from '@/components/ui/Toaster';
 
 /**
  * Client-side providers.
@@ -44,6 +45,9 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <WalletProvider>{children}</WalletProvider>
+        {/* Inside ThemeProvider so it can read the resolved theme, outside
+            WalletProvider because nothing it shows depends on a connection. */}
+        <Toaster />
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -34,7 +34,15 @@ lightening a white surface does nothing.
 
 ### Text
 
-`fg` `#f5f5f7` · `fg-secondary` `#a1a1aa` · `fg-muted` `#71717a` (dark).
+`fg` `#f5f5f7` · `fg-secondary` `#a1a1aa` · `fg-muted` `#8b8b94` (dark).
+
+`fg-muted` is the floor, not a free choice. It is only ever set at `meta` (13px)
+and `micro` (11px), so it never reaches the large-text threshold and must clear
+4.5:1 outright. The current pair — `#6e6e73` light, `#8b8b94` dark — sits at
+5.07:1 and 5.91:1. It was previously `#86868b` / `#71717a`, which measured
+3.62:1 and 4.12:1 and failed in both themes. Do not darken it back toward
+Apple's tertiary grey; that value is calibrated for larger text than this
+product uses it at.
 
 ### Accent
 
@@ -131,13 +139,51 @@ scrolls sideways.
 `--ease-out: cubic-bezier(0.32, 0.72, 0, 1)` — the decelerating curve that
 makes a surface feel like it settled rather than stopped.
 
-Motion is confined to state changes: hover tints, overlay entrances, a
-barely-perceptible `active:scale-[0.98]` on press. Nothing decorative, nothing
-that delays content.
+Motion is confined to state changes: hover tints, overlay entrances and exits,
+a barely-perceptible `active:scale-[0.98]` on press. Nothing decorative,
+nothing that delays content.
 
-Under `prefers-reduced-motion: reduce` all four durations become `0ms`, which
-disables every transition in the system at once because they all read from
-these variables.
+**Every surface that animates in animates out.** Radix unmounts a closed
+surface immediately unless it finds an animation on `[data-state="closed"]`, so
+an enter-only rule does not read as fast — it reads as the element being
+deleted. Exits run at `--dur-fast` against the enter's `--dur-base`: leaving
+should be quicker than arriving. Both directions keep `--ease-out`.
+
+**The command palette is the exception, in both directions.** It is reached by
+⌘K dozens of times a day, and an animation the user out-types reads as lag
+rather than polish. Only its backdrop fades. This is a rule about frequency,
+not about overlays — nothing else should copy it.
+
+### Reduced motion
+
+`prefers-reduced-motion` asks for less **movement**, not for a still image. The
+risk it guards against is vestibular, and that comes from travel through space
+— sliding, parallax, zooming, panning. Opacity and colour carry none of it.
+
+So durations are **not** zeroed and nothing is globally silenced. Instead the
+four overlay keyframes are redefined under the query to cross-fade in place.
+They omit `transform` on purpose: a keyframe that does not mention a property
+leaves the element's own value alone, which is what keeps the modal centred —
+its `-translate-x-1/2 -translate-y-1/2` would otherwise be overridden for the
+length of the animation and throw it into a corner.
+
+That block lives **after** the keyframes it replaces and **outside**
+`@layer base`. `@keyframes` resolve by layer first and document order second,
+and unlayered beats layered, so the same rules written inside the base layer
+would lose to the originals and silently do nothing.
+
+Kept deliberately: `animate-spin`, `active:scale-[0.98]`, and the disclosure
+chevron's rotate — all in place, under 20px, and all the interface answering
+the user rather than decorating itself. A spinner especially: the previous
+blanket `animation-duration: 0.01ms !important` did not shorten it, it stopped
+it on frame one, leaving a wallet transaction that can run for minutes with no
+sign it was still going.
+
+Sonner disables its own toast slide under this query, so that motion needs no
+catching here.
+
+**If you add motion that travels, add its reduced-motion variant beside it.**
+There is no global net any more; the net was what broke the spinners.
 
 ---
 
@@ -162,6 +208,13 @@ Rules that are enforced rather than suggested:
   found" is not acceptable.
 - **Errors are translated.** `ErrorState` renders plain language with the raw
   detail collapsed behind a disclosure. A revert string tells a user nothing.
+- **A toast is for an outcome the user cannot already see.** `Toaster` exists
+  for the narrow case where the thing acted on *disappears along with its own
+  label* — leaving a conversation, deleting a room. It is wrong for anything
+  already visible (a copied address turns its icon into a tick; a deleted
+  message vanishes from the transcript), wrong for errors, which must persist
+  and carry their detail, and never used for money. Anything involving funds
+  goes through `TransactionFlow`, which the user dismisses deliberately.
 
 ### Dialogs
 

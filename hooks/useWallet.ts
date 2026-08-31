@@ -11,7 +11,7 @@
  * change -- discarding whatever form the user had been filling in.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   getConnectedChainId,
   isWalletInstalled,
@@ -22,6 +22,32 @@ import { DEFAULT_CHAIN, isSupportedChain } from '@/chain/config';
 import { parseError, type ParsedError } from '@/lib/errors';
 
 const DISCONNECTED_KEY = 'openforge:wallet-disconnected';
+
+/**
+ * Whether a wallet is injected, as external state.
+ *
+ * This used to be a bare `isWalletInstalled()` call in the render body, which
+ * is a different answer on the server than in the browser: the server has no
+ * `window.ethereum` and says no, a visitor with MetaMask says yes. React
+ * hydrated the top bar as "Install a wallet" and then replaced it with
+ * "Connect wallet", throwing a hydration mismatch and discarding that subtree
+ * on every page load for every user who actually has a wallet.
+ *
+ * `useSyncExternalStore` is the fix rather than a `mounted` flag: React uses
+ * the server snapshot during hydration and then re-renders with the client
+ * one, which is exactly the intended sequence and needs no effect.
+ */
+function subscribeInstalled(onChange: () => void) {
+  // Some wallets inject after the document is interactive and announce it,
+  // so the answer is not always final on first read.
+  window.addEventListener('ethereum#initialized', onChange);
+  return () => window.removeEventListener('ethereum#initialized', onChange);
+}
+
+/** The server has no injected provider, and must say so. */
+function getInstalledServerSnapshot(): boolean {
+  return false;
+}
 
 export interface WalletState {
   account: string | null;
@@ -39,7 +65,11 @@ export function useWallet() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<ParsedError | null>(null);
 
-  const installed = isWalletInstalled();
+  const installed = useSyncExternalStore(
+    subscribeInstalled,
+    isWalletInstalled,
+    getInstalledServerSnapshot,
+  );
 
   // Restore an existing authorisation without prompting. `eth_accounts`
   // (unlike `eth_requestAccounts`) never opens the wallet UI.

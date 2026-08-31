@@ -95,16 +95,17 @@ Full table and the storage-layout reasoning: `OpenForge-Contracts/docs/GAS_OPTIM
   still the `.env.example` placeholder. A contract that asks people to lock
   funds in it should be readable by them; see
   `OpenForge-Contracts/deployments/sepolia.md` for the two commands.
-- **`import * as Icons from 'lucide-react'`** in `components/ui/Badge.tsx`
-  defeats tree-shaking on a 39 MB dependency, in the shared shell chunk for
-  every application route. `lib/status.ts` stores icon names as strings;
-  `lib/navigation.ts` already models the fix by storing the component.
+- ~~**`import * as Icons from 'lucide-react'`** in `components/ui/Badge.tsx`~~
+  **Fixed.** `components/ui/statusIcons.ts` now names each import behind a
+  `Record<StatusIconName, …>`, so a name added to the union without an import
+  is a compile error rather than a missing icon.
 - **Client-side profile N+1 on the two public pages.** `Person` resolves each
   address through one RPC read plus one IPFS fetch. `/discover` renders up to
   24 and `/funding` up to 100 — both pages otherwise fully server-rendered.
   The server loaders already resolve IPFS metadata in a `Promise.all`; profiles
   should join it.
-- **`/funding` has no `loading.tsx`** despite ~600 server-side RPC reads.
+- ~~**`/funding` has no `loading.tsx`**~~ **Fixed.** `app/(app)/funding/loading.tsx`
+  exists and mirrors the real layout.
 - **Backend: nonces are `Math.random()`, never expire, and any stranger can
   reset yours** by calling the unauthenticated `/auth/nonce` for your address.
   The signed message is bound to no domain, chain or time — it is not SIWE.
@@ -116,18 +117,96 @@ Full table and the storage-layout reasoning: `OpenForge-Contracts/docs/GAS_OPTIM
 
 - `/profile` is not in the navigation, and `/profile/[address]` — a full
   server-rendered public page — is linked from only two places.
-- Safe-area inset double-counted at the bottom of every page on notched
-  phones (`app/(app)/layout.tsx` reserves `pb-14`; the tab bar is taller).
-- `components/ui/Table.tsx` never actually scrolls: `min-w-full` beside
-  `w-full` is a no-op, so columns crush instead.
-- `'Platform fee (1.5%)'` is hardcoded in `components/escrow/intents.tsx` — in
-  the signing dialog, beside a fee that *is* computed from the constant.
-- Four unused runtime dependencies in the frontend (`sonner`, three Radix
-  packages); three in the backend (`bcryptjs`, `uuid`, `pg-pool`).
+- ~~Safe-area inset double-counted at the bottom of every page on notched
+  phones.~~ **Fixed.** `<main>` now reserves
+  `calc(3.5rem + env(safe-area-inset-bottom))`. `/messages` sizes itself to the
+  viewport, so its height calc subtracts the same inset to stay in agreement.
+- ~~`components/ui/Table.tsx` never actually scrolls.~~ **Fixed.** `min-w-full`
+  is replaced by a real `minWidth` prop (default `28rem`), so the wrapper has
+  something to scroll. The docstring also advertised a `mobileCards` prop that
+  was never implemented; that claim is gone.
+- ~~`'Platform fee (1.5%)'` is hardcoded in `components/escrow/intents.tsx`.~~
+  **Fixed.** `intents.tsx` computes it from `feeBps`. The remaining hardcodes
+  were on `/funding`, which now uses the shared `feePercent` helper in
+  `lib/format.ts`. `EscrowIllustration` keeps its literal deliberately — it is
+  a fixed illustration whose arithmetic is the point.
+- ~~Four unused runtime dependencies in the frontend (`sonner`, three Radix
+  packages).~~ **Fixed.** The three Radix packages (`react-popover`,
+  `react-select`, `react-tooltip`) are removed. `sonner` is now mounted as the
+  product's transient feedback layer — see `components/ui/Toaster.tsx`.
+  Three remain in the backend (`bcryptjs`, `uuid`, `pg-pool`).
 - Backend: five near-identical membership checks, no two identical; four
   distinct API response envelopes across 29 endpoints; `parseInt` on
   unvalidated `limit`/`offset` turns `?limit=abc` into a 500.
 - No pagination on six backend endpoints that return unbounded sets.
+
+---
+
+## UI pass — found and fixed
+
+Not previously recorded. Ordered by consequence.
+
+- **`/design` demonstrated a patched vulnerability as current behaviour.** Its
+  example `caution` note read "The funder can resolve a dispute immediately.
+  You must wait 30 days" — not a stale figure but a description of the v1
+  asymmetry listed under P0 above, the one that let the funder win every
+  dispute by construction. `PROTOCOL.disputeWindowSeconds` has been 14 days and
+  symmetric since the v2 deploy. A reference page is exactly where a sentence
+  gets copied into something real, so it now derives the window and states what
+  a dispute actually does: freezes reclaim, awards nothing, once per party.
+- **The escrow wizard claimed four wallet confirmations.** The summary beside
+  the deposit total described the pre-factory flow — deploy, register, approve,
+  deposit — long after `createEscrow` folded the first two and EIP-2612 folded
+  the last two. `hooks/queries.ts` already said "two wallet confirmations or
+  three" in a comment; the wizard was the last place saying four. It now derives
+  the count from the same two facts `createEscrowIntent` branches on, and says
+  nothing at all while the permit read is in flight rather than guessing.
+- **`--fg-muted` failed WCAG AA in both themes** — 3.62:1 light, 4.12:1 dark,
+  and never used above 13px. It carries field hints, `Stat` labels, table
+  headers, timestamps and the net-of-fee figure under every milestone. Now
+  `#6e6e73` (5.07:1) and `#8b8b94` (5.91:1).
+- **`prefers-reduced-motion` froze every spinner.** The blanket
+  `animation-duration: 0.01ms !important` does not shorten `animate-spin`, it
+  stops it on frame one — turning the only sign that a transaction was still in
+  flight into a static icon, for the users least able to infer progress from a
+  frozen screen. The whole block was reworked rather than patched: the setting
+  asks for less movement, not a still image, so durations are no longer zeroed
+  and nothing is globally silenced. The four overlay keyframes are redefined
+  under the query to cross-fade in place, which removes the travel at source
+  and leaves the fades, hover tints and focus rings that carry no vestibular
+  risk and do real work. See `docs/DESIGN.md` for the placement constraint —
+  the override must sit after the originals and outside `@layer base` or it
+  silently loses.
+- **Overlays animated in but not out.** Radix unmounts immediately unless it
+  finds an animation on `[data-state="closed"]`, so a 220ms entrance was paired
+  with a dropped frame. Exits now run at `--dur-fast`.
+- **The command palette animated on ⌘K.** Removed entirely; only the backdrop
+  fades. A surface opened dozens of times a day should not make the user wait
+  for it, and the field being typed into should not still be moving.
+- **The hero headline had two orphans.** A hard `<br />` left over from a
+  fixed-size headline fought the fluid `clamp`, producing four lines with
+  "work" and "time." alone. Replaced with `text-balance`.
+- **`FundingProgress` read as a divider** — 6px tall across a 1000px column, in
+  a list whose rows are separated by hairlines. Constrained and thickened; its
+  `aria-label` also stopped at two of the three segments it renders.
+- **`Composer` and `MessageList` had each restated `Input`'s field style from
+  memory**, and both had drifted — neither carried the shadow, the transition
+  or the hover border. Extracted to `components/ui/fieldStyles.ts`, following
+  the same non-client-module pattern as `buttonStyles.ts`.
+- **`scroll-behavior: smooth` was global** and affected exactly one thing: the
+  skip link. Next forces `auto` for router navigation, and the property is not
+  inherited so the chat transcript was never affected. Removed.
+
+Two things looked like defects from the source and were not:
+
+- **Hover states are already gated for touch.** Tailwind v4 emits every
+  `hover:` and `group-hover:` utility inside `@media (hover: hover)`. Verified
+  in the compiled CSS. No change needed.
+- **The missing `loading.tsx` files are deliberate.** `/projects/[projectId]`
+  and `/profile/[address]` document why: streaming flushes a 200 before
+  `notFound()` runs, so a shareable URL returns a soft 404. `/escrow/[address]`
+  calls `notFound()` too. Every client component already renders its own
+  skeleton. Do not add them.
 
 ---
 

@@ -48,6 +48,7 @@ export function WalletStatus() {
       <Button
         size="sm"
         variant="primary"
+        pill
         loading={wallet.isConnecting}
         onClick={wallet.connect}
         leadingIcon={<Wallet className="size-4" aria-hidden />}
@@ -98,7 +99,13 @@ export function WalletStatus() {
           className={cn(
             'z-[var(--z-overlay)] w-80 max-w-[calc(100vw-1.5rem)] rounded-lg border border-line bg-elevated p-1.5',
             'shadow-[var(--shadow-lg)]',
+            // Grows from the avatar it belongs to rather than from its own
+            // centre. Radix measures the resolved side and alignment — which
+            // flip near a viewport edge — so this stays correct when the menu
+            // has to open upwards.
+            'origin-(--radix-dropdown-menu-content-transform-origin)',
             'data-[state=open]:animate-[of-drop-in_var(--dur-fast)_var(--ease-out)]',
+            'data-[state=closed]:animate-[of-drop-out_var(--dur-instant)_var(--ease-out)]',
           )}
         >
           <div className="px-2.5 py-2">

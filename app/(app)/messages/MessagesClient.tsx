@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { toast } from 'sonner';
 import {
   ChevronLeft,
   Hash,
@@ -270,9 +271,14 @@ export function MessagesClient({
   return (
     // Full height minus the top bar, and on mobile the tab bar as well, so
     // the composer sits directly above whichever chrome is on screen.
+    //
+    // The safe-area inset is subtracted here for the same reason the shell now
+    // adds it: this page is sized to fill the viewport exactly, so it has to
+    // agree with `<main>`'s bottom padding or the composer ends up pushed one
+    // inset below the fold on a notched phone.
     <Page
       width="wide"
-      className="flex h-[calc(100dvh-7rem)] flex-col lg:h-[calc(100dvh-3.5rem)]"
+      className="flex h-[calc(100dvh_-_7rem_-_env(safe-area-inset-bottom))] flex-col lg:h-[calc(100dvh_-_3.5rem)]"
     >
       <PageHeader
         title="Messages"
@@ -528,6 +534,17 @@ export function MessagesClient({
             await chat.leaveRoom(token, target.id);
             if (roomId === target.id) setRoomId(null);
             await queryClient.invalidateQueries({ queryKey: [CHAT_ROOMS_KEY] });
+            // Named, because the row it was named on has just gone. Without
+            // this the only evidence the action worked is a list that is one
+            // shorter than it was, which is also what a failed refetch looks
+            // like.
+            //
+            // `activeRoomLabel` rather than `target.name`: a pair room's stored
+            // name is written from the creator's side and reads backwards for
+            // the other party. This is the label that was actually on screen.
+            // Both room actions are only reachable from the active room's
+            // header, so it always describes `target`.
+            toast.success(`You left ${activeRoomLabel}.`);
           });
         }}
       />
@@ -551,6 +568,9 @@ export function MessagesClient({
             await chat.deleteRoom(token, target.id);
             if (roomId === target.id) setRoomId(null);
             await queryClient.invalidateQueries({ queryKey: [CHAT_ROOMS_KEY] });
+            toast.success(`${activeRoomLabel} was deleted.`, {
+              description: 'It is gone for everyone who was in it.',
+            });
           });
         }}
       />

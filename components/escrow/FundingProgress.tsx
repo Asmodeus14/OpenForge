@@ -37,11 +37,27 @@ export function FundingProgress({
   // contract does not track it separately.
   const returnedPct = Math.max(0, 100 - releasedPct - heldPct);
 
+  // Announced in full, including the returned share — the legend names three
+  // states, so a description that stops at two leaves a screen-reader user
+  // unable to account for the remainder.
+  const label = [
+    `${Math.round(releasedPct)}% paid to the developer`,
+    `${Math.round(heldPct)}% still held in escrow`,
+    returnedPct > 0.5 ? `${Math.round(returnedPct)}% returned to the funder` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <div
-      className={cn('flex h-1.5 w-full overflow-hidden rounded-full bg-subtle', className)}
+      // `h-2` rather than `h-1.5`. At 6px stretched across a 1000px content
+      // column this had the proportions of a rule, and in a list whose rows are
+      // already separated by hairlines it read as one more separator. Callers
+      // are expected to constrain the width; the extra 2px is what stops it
+      // disappearing into the page furniture when they do not.
+      className={cn('flex h-2 w-full overflow-hidden rounded-full bg-subtle', className)}
       role="img"
-      aria-label={`${Math.round(releasedPct)}% released, ${Math.round(heldPct)}% still held in escrow`}
+      aria-label={label}
     >
       {releasedPct > 0 && (
         <span className="bg-success" style={{ width: `${releasedPct}%` }} aria-hidden />

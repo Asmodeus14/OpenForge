@@ -11,8 +11,16 @@ import { cn } from '@/lib/cn';
  * and a hover tint do the structural work.
  *
  * On narrow screens the table scrolls horizontally inside its own container
- * rather than forcing the page to scroll sideways. Where a row is better
- * expressed as a card on mobile, pass `mobileCards`.
+ * rather than forcing the page to scroll sideways.
+ *
+ * That only works if the table is allowed to be wider than the container. It
+ * previously carried `w-full min-w-full`, which is the same declaration twice
+ * — `min-width: 100%` cannot exceed `width: 100%` — so there was never any
+ * overflow to scroll and the columns crushed instead. `minWidth` is the real
+ * floor; below it the wrapper scrolls, above it `w-full` takes over.
+ *
+ * (This comment used to end by offering a `mobileCards` prop for rows better
+ * expressed as cards on a phone. No such prop was ever implemented.)
  */
 
 export interface Column<T> {
@@ -33,6 +41,7 @@ export function Table<T>({
   onRowClick,
   caption,
   empty,
+  minWidth = '28rem',
   className,
 }: {
   columns: Column<T>[];
@@ -42,13 +51,21 @@ export function Table<T>({
   /** Describes the table for screen readers. */
   caption: string;
   empty?: ReactNode;
+  /**
+   * The width below which the container scrolls instead of compressing.
+   *
+   * The default clears a phone: at 375px the wrapper scrolls rather than
+   * squeezing a project title into three characters a line. Raise it for a
+   * table whose columns need more room than that.
+   */
+  minWidth?: string;
   className?: string;
 }) {
   if (rows.length === 0 && empty) return <>{empty}</>;
 
   return (
     <div className={cn('-mx-2 overflow-x-auto', className)}>
-      <table className="w-full min-w-full border-collapse">
+      <table className="w-full border-collapse" style={{ minWidth }}>
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="border-b border-line">

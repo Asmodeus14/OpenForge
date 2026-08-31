@@ -23,8 +23,10 @@ export function MobileTabBar() {
     <nav
       aria-label="Primary"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t border-line lg:hidden',
-        'bg-canvas/90 backdrop-blur-xl backdrop-saturate-150',
+        'fixed inset-x-0 bottom-0 z-[var(--z-sticky)] lg:hidden',
+        // Matches the top bar. The border is reset to the top edge only —
+        // `.of-glass` draws all four, and three of them are off-screen here.
+        'of-glass of-glass-thick rounded-none border-x-0 border-b-0',
         'pb-[env(safe-area-inset-bottom)]',
       )}
     >
