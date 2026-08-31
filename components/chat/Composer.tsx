@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SendHorizontal } from 'lucide-react';
 import { IconButton } from '@/components/ui/Button';
+import { FIELD } from '@/components/ui/fieldStyles';
 import { cn } from '@/lib/cn';
 
 /**
@@ -89,10 +90,8 @@ export function Composer({
           }
         }}
         className={cn(
-          'max-h-40 min-h-10 flex-1 resize-y rounded-md border border-line bg-surface px-3 py-2.5',
-          'text-body text-fg placeholder:text-fg-muted',
-          'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-subtle',
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          FIELD,
+          'max-h-40 min-h-10 flex-1 resize-y px-3 py-2.5 text-body',
         )}
       />
       <IconButton

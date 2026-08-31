@@ -35,7 +35,13 @@
      Never pure black. #1D1D1F reads softer and more deliberate on white. */
   --fg: #1d1d1f;
   --fg-secondary: #545456;
-  --fg-muted: #86868b;
+  /* 5.07:1 on canvas. This was #86868b — Apple's tertiary grey, which reads
+     correctly at the sizes Apple uses it and fails here: `fg-muted` carries
+     `text-meta` (13px) and `text-micro` (11px), so it never reaches the
+     large-text threshold where 3.62:1 would have been acceptable. It is the
+     colour of field hints, Stat labels, table headers, and the net-of-fee
+     figure under every milestone. */
+  --fg-muted: #6e6e73;
   --fg-on-accent: #ffffff;
 
   /* ------------------------------------------------------------- accent
@@ -93,7 +99,10 @@
 
   --fg: #f5f5f7;
   --fg-secondary: #a1a1aa;
-  --fg-muted: #71717a;
+  /* 5.91:1 on canvas, up from 4.12:1. Dark mode failed the same check as
+     light: a muted grey that looks restrained against near-black is still
+     below AA once it is set at 11–13px. */
+  --fg-muted: #8b8b94;
   --fg-on-accent: #ffffff;
 
   /* Lighter than the light-mode accent so it holds contrast on near-black.
@@ -283,10 +292,336 @@
   --z-toast: 60;
 }
 
+/* ==========================================================================
+   Environment
+
+   The marketing site renders a sky. It is procedural — layered gradients, one
+   rasterised noise field, a generated star field — because there are no image
+   assets in this repository and buying stock photography would have meant a
+   megabyte of sky that cannot recolour, cannot respond to the clock, and looks
+   wrong at half the viewport sizes it lands in.
+
+   Everything below is a palette. The components that consume it never name a
+   colour; they position gradients using these variables, so moving from dawn
+   to night is a set of custom properties changing value and nothing re-rendering.
+
+   `data-phase` is stamped by `ThemeScript` before first paint. The transition
+   is deliberately slow — this is ambient, not interface, and the 220ms that
+   suits a dropdown would read as a light switch being flipped.
+   ========================================================================== */
+
+:root {
+  --env-zenith: #bcd8f5;
+  --env-mid: #dbeafe;
+  --env-horizon: #fdf6ec;
+  --env-glow: rgba(255, 214, 165, 0.55);
+  --env-glow-x: 78%;
+  --env-glow-y: 26%;
+  --env-cloud: rgba(255, 255, 255, 0.92);
+  --env-cloud-shadow: rgba(148, 170, 200, 0.24);
+  --env-star: 0;
+  --env-body: #fff6e0;
+  --env-body-glow: rgba(255, 224, 170, 0.7);
+  --env-haze: rgba(255, 255, 255, 0.5);
+  /* Terrain. Two ranges: the far one sits in haze and is barely separated from
+     the sky, the near one carries the silhouette. `lit` is the face turned
+     toward the light source and is what stops them reading as flat cutouts. */
+  --env-peak-far: #c3d3e8;
+  --env-peak-near: #93a9c6;
+  --env-peak-lit: #e6ddd4;
+  /* Birds by day, windows by night. Each is zero in the other half of the
+     cycle, so both are always in the DOM and simply fade. */
+  --env-birds: 0.5;
+  --env-village: 0;
+  --env-transition: 1200ms;
+}
+
+[data-phase='dawn'] {
+  --env-zenith: #9db8e0;
+  --env-mid: #d9c7e4;
+  --env-horizon: #ffd9b8;
+  --env-glow: rgba(255, 176, 132, 0.6);
+  --env-glow-x: 24%;
+  --env-glow-y: 62%;
+  --env-cloud: rgba(255, 240, 234, 0.9);
+  --env-cloud-shadow: rgba(150, 130, 170, 0.28);
+  --env-star: 0.18;
+  --env-body: #ffe2bd;
+  --env-body-glow: rgba(255, 178, 128, 0.65);
+  --env-haze: rgba(255, 226, 205, 0.45);
+  --env-peak-far: #b6a8c4;
+  --env-peak-near: #776a90;
+  --env-peak-lit: #ffcda4;
+  --env-birds: 0.35;
+  --env-village: 0.35;
+}
+
+[data-phase='day'] {
+  --env-zenith: #bcd8f5;
+  --env-mid: #dbeafe;
+  --env-horizon: #fdf6ec;
+  --env-glow: rgba(255, 214, 165, 0.55);
+  --env-glow-x: 78%;
+  --env-glow-y: 26%;
+  --env-cloud: rgba(255, 255, 255, 0.92);
+  --env-cloud-shadow: rgba(148, 170, 200, 0.24);
+  --env-star: 0;
+  --env-body: #fff6e0;
+  --env-body-glow: rgba(255, 224, 170, 0.7);
+  --env-haze: rgba(255, 255, 255, 0.5);
+  --env-peak-far: #c3d3e8;
+  --env-peak-near: #93a9c6;
+  --env-peak-lit: #e6ddd4;
+  --env-birds: 0.5;
+  --env-village: 0;
+}
+
+[data-phase='dusk'] {
+  --env-zenith: #3b4a7a;
+  --env-mid: #7d6c9e;
+  --env-horizon: #e9a17c;
+  --env-glow: rgba(255, 150, 110, 0.5);
+  --env-glow-x: 70%;
+  --env-glow-y: 68%;
+  --env-cloud: rgba(226, 200, 214, 0.62);
+  --env-cloud-shadow: rgba(60, 50, 90, 0.4);
+  --env-star: 0.4;
+  --env-body: #ffc9a0;
+  --env-body-glow: rgba(255, 150, 110, 0.5);
+  --env-haze: rgba(120, 100, 150, 0.3);
+  --env-peak-far: #6b6490;
+  --env-peak-near: #3d3860;
+  --env-peak-lit: #d98a6a;
+  --env-birds: 0.2;
+  --env-village: 0.7;
+}
+
+[data-phase='night'] {
+  --env-zenith: #05070f;
+  --env-mid: #0b1226;
+  --env-horizon: #16204a;
+  --env-glow: rgba(108, 92, 232, 0.24);
+  --env-glow-x: 30%;
+  --env-glow-y: 22%;
+  --env-cloud: rgba(52, 62, 104, 0.42);
+  --env-cloud-shadow: rgba(4, 6, 16, 0.55);
+  --env-star: 1;
+  --env-body: #e8ecff;
+  --env-body-glow: rgba(190, 205, 255, 0.35);
+  --env-haze: rgba(30, 40, 80, 0.35);
+  --env-peak-far: #1b2444;
+  --env-peak-near: #0a0f22;
+  --env-peak-lit: #2c3560;
+  --env-birds: 0;
+  --env-village: 1;
+}
+
+/* ==========================================================================
+   Glass
+
+   A material, not a colour. Four values describe it — the tint, the edge, the
+   highlight that reads as light catching the top rim, and the shadow that
+   separates it from what is behind.
+
+   It is only worth using where something is actually behind it. Over a flat
+   section background, translucency has nothing to reveal and degrades into a
+   slightly muddy card; these classes belong on surfaces that sit over the
+   environment. The mid-page sections borrow the *shape* language — soft top
+   highlight, generous radius — without the transparency.
+   ========================================================================== */
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 8px 32px -8px rgba(20, 40, 80, 0.16);
+  /* Application panels are markedly more opaque than marketing ones. They
+     carry addresses and amounts, and a figure misread by one digit is a
+     different figure — legibility outranks atmosphere wherever money is on
+     screen. The sky still shows through; it just stops competing. */
+  --panel-bg: rgba(255, 255, 255, 0.86);
+  /* Coloured light thrown by a filled control, the same way the sky's body
+     throws light. It is what separates a gradient chip from a lit one. */
+  --accent-glow: rgba(91, 75, 214, 0.34);
+  --danger-glow: rgba(200, 53, 47, 0.3);
+  /* The rim along the top edge of a small control. Weaker than a panel's —
+     at 36px tall, a panel's highlight reads as a white line. */
+  --btn-rim: rgba(255, 255, 255, 0.28);
+  --btn-face: rgba(255, 255, 255, 0.72);
+}
+
+.dark {
+  --glass-bg: rgba(18, 22, 40, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.6);
+  --panel-bg: rgba(14, 18, 34, 0.82);
+  --accent-glow: rgba(108, 92, 232, 0.4);
+  --danger-glow: rgba(204, 58, 63, 0.34);
+  --btn-rim: rgba(255, 255, 255, 0.14);
+  --btn-face: rgba(255, 255, 255, 0.06);
+}
+
+@layer components {
+  .of-glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    /* Saturation is what stops a blurred backdrop going grey. Without it the
+       sky behind reads as fog rather than as sky seen through glass. */
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow:
+      var(--glass-shadow),
+      inset 0 1px 0 0 var(--glass-highlight);
+  }
+
+  /* Larger surfaces read as thicker glass: more blur, deeper shadow. A single
+     blur radius across a 40px chip and a 600px panel makes the big one look
+     like a flat wash. */
+  .of-glass-thick {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+  }
+
+  /* The same material read as a solid.
+
+     For panels sitting on a flat section background, where there is nothing
+     behind to see through. It keeps the parts of the language that survive
+     opacity — the lit top rim, the soft deep shadow, the faint vertical
+     gradient that makes a face look curved rather than printed — and drops the
+     blur, which would otherwise cost a full-surface repaint for no visible
+     gain. */
+  .of-panel {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--elevated) 100%, white 4%),
+      var(--elevated)
+    );
+    border: 1px solid var(--line);
+    box-shadow:
+      var(--shadow-md),
+      inset 0 1px 0 0 var(--glass-highlight);
+  }
+
+  /* Glass for application surfaces: the sky reads through it, the content
+     does not have to fight it. Same material, weighted for reading. */
+  .of-glass-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow:
+      var(--glass-shadow),
+      inset 0 1px 0 0 var(--glass-highlight);
+  }
+
+  /* ---------------------------------------------------------------- buttons
+
+     The same material as the panels, at the scale of a control.
+
+     Deliberately without `backdrop-filter`. A blurred backdrop is a real cost
+     per element — each one is its own backdrop root — and a form can easily
+     carry a dozen buttons where a page carries two panels. What actually reads
+     as glass at this size is the lit top rim, a translucent face that picks up
+     whatever is behind it, and a soft shadow. The blur is the one part nobody
+     notices missing on a 36px control, and it is the expensive part.
+
+     Filled variants get a vertical gradient and a coloured glow rather than a
+     flat fill: light falling on a curved face, and the face throwing some back.
+     Text stays on a solid accent, so the contrast the palette guarantees is
+     unaffected. */
+  .of-btn-face {
+    background-color: var(--btn-face);
+    box-shadow:
+      var(--shadow-sm),
+      inset 0 1px 0 0 var(--btn-rim);
+  }
+
+  .of-btn-primary {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent) 86%, white 14%),
+      var(--accent)
+    );
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.12),
+      0 6px 16px -6px var(--accent-glow),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.26);
+  }
+
+  .of-btn-primary:hover {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent-hover) 88%, white 12%),
+      var(--accent-hover)
+    );
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.12),
+      0 8px 22px -6px var(--accent-glow),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+
+  /* Pressed surfaces sit down into the page: the glow collapses and the rim
+     goes inward. Without this the scale-down reads as the button shrinking
+     rather than as it being pushed. */
+  .of-btn-primary:active {
+    background-image: linear-gradient(to bottom, var(--accent-active), var(--accent-active));
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22);
+  }
+
+  .of-btn-danger {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--danger) 86%, white 14%),
+      var(--danger)
+    );
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.12),
+      0 6px 16px -6px var(--danger-glow),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.24);
+  }
+
+  .of-btn-danger:active {
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22);
+  }
+
+  /* Some people get motion sick or simply cannot read text over a live
+     backdrop. Honour the request: solid fill, no blur, keep the edge. */
+  @media (prefers-reduced-transparency: reduce) {
+    .of-glass,
+    .of-glass-panel {
+      background: var(--elevated);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  /* Same for a forced-contrast preference — translucency is the first thing
+     that should go when someone has asked for defined edges. */
+  @media (prefers-contrast: more) {
+    .of-glass,
+    .of-glass-panel {
+      background: var(--elevated);
+      border-color: var(--line-strong);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+}
+
 @layer base {
+  /* No `scroll-behavior: smooth`.
+
+     It reads as a harmless nicety, but in this application it applied to
+     exactly one thing. Next's router already forces `auto` for its own
+     navigation scrolls, and `scroll-behavior` is not inherited, so the chat
+     transcript's `scrollIntoView` was never affected either. The single
+     remaining in-page anchor is the skip link in `app/layout.tsx` — where a
+     500ms animated glide is not a nicety but a regression, because focus has
+     already jumped to `#main` while the viewport is still travelling, which is
+     the precise experience the link exists to avoid. */
   html {
     -webkit-text-size-adjust: 100%;
-    scroll-behavior: smooth;
   }
 
   body {
@@ -348,27 +683,22 @@
     background-clip: content-box;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
-    :root {
-      --dur-instant: 0ms;
-      --dur-fast: 0ms;
-      --dur-base: 0ms;
-      --dur-slow: 0ms;
-    }
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
 }
 
-/* ---------------------------------------------------------------- motion */
+/* ---------------------------------------------------------------- motion
+
+   Every surface that animates in also animates out.
+
+   Radix unmounts a closed surface immediately unless it finds an animation on
+   `[data-state="closed"]`, so an enter-only rule does not read as "fast" — it
+   reads as the element being deleted. Opening was a 220ms settle and closing
+   was a single dropped frame.
+
+   Exits run at `--dur-fast` against the enter's `--dur-base`: leaving should
+   be quicker than arriving, because by then the user has already decided and
+   is waiting on the interface rather than reading it. Both directions keep
+   `--ease-out` — an exit on `ease-in` stalls at exactly the moment attention
+   returns to the page underneath. */
 
 @keyframes of-fade-in {
   from {
@@ -379,6 +709,18 @@
   }
 }
 
+@keyframes of-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Modals stay centred rather than growing from a trigger: they are not
+   anchored to one. The 2% drift is enough to read as a settle without
+   implying an origin the dialog does not have. */
 @keyframes of-overlay-in {
   from {
     opacity: 0;
@@ -390,6 +732,19 @@
   }
 }
 
+@keyframes of-overlay-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+
+/* Never from `scale(0)`. Nothing in the physical world resumes from nothing,
+   and 0.98 is close enough that the surface appears to have been there. */
 @keyframes of-drop-in {
   from {
     opacity: 0;
@@ -401,14 +756,111 @@
   }
 }
 
-@keyframes of-rise {
+@keyframes of-drop-out {
   from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
     opacity: 1;
     transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* Data moving along the architecture diagram's edges.
+
+   A dashed stroke whose offset advances. Linear, because it represents
+   continuous flow rather than something arriving, and slow enough to read as
+   direction rather than as a barber's pole. */
+@keyframes of-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+/* ---------------------------------------------------- prefers-reduced-motion
+
+   The setting asks for less *movement*, not for a still image.
+
+   What it protects against is vestibular disturbance, and that comes from
+   travel through space — sliding, parallax, zooming, panning. Opacity and
+   colour carry no such risk, and they are doing real work here: a fade is how
+   an overlay says it arrived, rather than that the page reloaded underneath
+   you.
+
+   This used to zero all four duration tokens and then collapse every animation
+   and transition to 0.01ms with `!important`. That is the snippet everyone
+   pastes, and it over-reaches in both directions:
+
+     - it stopped every spinner on its first frame, so a wallet transaction
+       that can run for minutes had no sign it was still going — for exactly
+       the users least able to infer progress from a frozen screen;
+     - it removed the hover, focus and border transitions that make the
+       interface legible, none of which move anything.
+
+   So durations are left alone and nothing is globally silenced. The travel is
+   removed at its source instead: the four overlay keyframes are redefined to
+   cross-fade in place.
+
+   They deliberately do not mention `transform`. A keyframe that omits a
+   property leaves the element's own value alone, which is what keeps the modal
+   centred — its `-translate-x-1/2 -translate-y-1/2` would otherwise be
+   overridden for the duration of the animation and throw it into a corner.
+
+   This block must stay here: after the keyframes it replaces, and outside
+   `@layer base`. `@keyframes` resolve by layer first and document order
+   second, and unlayered beats layered — so the same rules written inside the
+   base layer above would lose to the originals and silently do nothing.
+
+   Kept on purpose: `animate-spin` (essential progress), `active:scale-[0.98]`
+   press feedback, and the disclosure chevron's rotate. All three happen in
+   place, under 20px, and are the interface answering the user rather than
+   decorating itself. Sonner disables its own toast slide under this query, so
+   that motion is already handled and needs no catching here.
+
+   The rule for anything added later: if it travels, give it a reduced-motion
+   variant beside it. There is no global net any more — the net was what broke
+   the spinners. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes of-overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes of-overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes of-drop-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes of-drop-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* The diagram's edges stop travelling and simply sit there dashed. The
+     direction is already carried by the arrowheads, so nothing is lost. */
+  @keyframes of-flow {
+    to {
+      stroke-dashoffset: 0;
+    }
   }
 }
 

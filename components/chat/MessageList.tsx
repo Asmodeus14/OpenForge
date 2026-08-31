@@ -5,6 +5,7 @@ import { Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/Button';
+import { FIELD } from '@/components/ui/fieldStyles';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative, isAddressEqual, shortenAddress } from '@/lib/format';
 import { useDisplayName } from '@/components/trust/Identity';
@@ -168,7 +169,7 @@ export function MessageList({
                         setEditingId(null);
                       }
                     }}
-                    className="flex-1 resize-y rounded-md border border-line bg-surface px-3 py-2 text-body text-fg focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-subtle"
+                    className={cn(FIELD, 'flex-1 resize-y px-3 py-2 text-body')}
                   />
                   <IconButton
                     label="Save changes"

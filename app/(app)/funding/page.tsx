@@ -14,8 +14,9 @@ import {
 import { ProfileSeedProvider } from '@/components/trust/ProfileSeed';
 import { loadFunding } from '@/lib/server/escrows';
 import { loadProfileSeeds } from '@/lib/server/profiles';
-import { formatDate, formatTokenAmount } from '@/lib/format';
+import { feePercent, formatDate, formatTokenAmount } from '@/lib/format';
 import { escrowState } from '@/lib/status';
+import { PROTOCOL } from '@/chain/config';
 
 export const metadata: Metadata = {
   title: 'Funding',
@@ -101,7 +102,7 @@ export default async function FundingPage() {
                     releasedByToken[symbol]?.amount ?? 0n,
                     releasedByToken[symbol]?.decimals ?? 18,
                   )}
-                  detail="Before the 1.5% fee"
+                  detail={`Before the ${feePercent(PROTOCOL.feeBasisPoints)} fee`}
                 />
               ))}
             </dl>
@@ -176,7 +177,10 @@ export default async function FundingPage() {
 
                   {escrow && escrow.totalAmount > 0n && (
                     <FundingProgress
-                      className="mt-5"
+                      // Constrained rather than full-bleed: a meter that runs
+                      // the whole width of the page is indistinguishable from
+                      // the hairline separating the rows above and below it.
+                      className="mt-5 max-w-md"
                       total={escrow.totalAmount}
                       released={escrow.releasedGross}
                       held={escrow.contractBalance}
@@ -187,8 +191,9 @@ export default async function FundingPage() {
             </ol>
 
             <DisclosureNote className="mt-8">
-              Amounts paid out are shown before the 1.5% platform fee, matching the figure
-              the contract stores. The developer receives the amount minus that fee.
+              Amounts paid out are shown before the {feePercent(PROTOCOL.feeBasisPoints)}{' '}
+              platform fee, matching the figure the contract stores. The developer receives
+              the amount minus that fee.
             </DisclosureNote>
           </Section>
         </>

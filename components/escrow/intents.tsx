@@ -14,7 +14,13 @@ import {
 import { createEscrow, type CreateEscrowParams } from '@/chain/escrowFactory';
 import { signPermit } from '@/chain/erc20';
 import { DEFAULT_CHAIN, PROTOCOL, type TokenInfo } from '@/chain/config';
-import { formatTokenAmount, formatDuration, formatDate, shortenAddress } from '@/lib/format';
+import {
+  formatTokenAmount,
+  formatDuration,
+  formatDate,
+  feePercent,
+  shortenAddress,
+} from '@/lib/format';
 import { AddressDisplay, TokenAmount } from '@/components/trust/Trust';
 import type { TxIntent } from '@/hooks/useTransaction';
 
@@ -67,8 +73,6 @@ const networkFact = () => ({ label: 'Network', value: DEFAULT_CHAIN.label });
 export function totalFeeFor(amounts: bigint[], feeBps: bigint): bigint {
   return amounts.reduce((sum, amount) => sum + (amount * feeBps) / 10_000n, 0n);
 }
-
-const feePercent = (feeBps: bigint) => `${Number(feeBps) / 100}%`;
 
 const milestoneLabel = (milestone: Milestone, names?: Record<number, string>) =>
   names?.[milestone.index] || `Milestone ${milestone.index + 1}`;

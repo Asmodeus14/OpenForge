@@ -23,18 +23,31 @@ export const BUTTON_SIZES: Record<ButtonSize, string> = {
   lg: 'h-12 px-6 text-body gap-2',
 };
 
+/**
+ * The four variants, as material rather than as flat fills.
+ *
+ * `primary` and `danger` are lit faces: a vertical gradient, a coloured glow
+ * beneath, and a bright rim along the top edge. `secondary` is the same glass
+ * the panels are made of, at control scale. `ghost` stays a bare label until
+ * hovered, because a page where every control is a lit chip has no hierarchy
+ * left to spend.
+ *
+ * The heavy lifting lives in `.of-btn-*` in `globals.css` — gradients, glows
+ * and inset rims are unreadable as Tailwind arbitrary values, and they belong
+ * with the other material definitions rather than scattered here.
+ */
 export const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-accent text-fg-on-accent hover:bg-accent-hover active:bg-accent-active shadow-[var(--shadow-sm)]',
-  secondary:
-    'bg-surface text-fg border border-line hover:border-line-strong hover:bg-subtle shadow-[var(--shadow-sm)]',
+  primary: 'of-btn-primary text-fg-on-accent',
+  secondary: 'of-btn-face text-fg border border-line hover:border-line-strong',
   ghost: 'bg-transparent text-fg-secondary hover:bg-subtle hover:text-fg',
-  danger: 'bg-danger text-white hover:brightness-110 active:brightness-95',
+  danger: 'of-btn-danger text-white',
 };
 
 const BASE = cn(
-  'inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap',
-  'transition-[background-color,border-color,color,transform,box-shadow]',
+  // `lg` rather than `md`. The surfaces around these moved to `2xl`, and an
+  // 8px control inside a 16px panel reads as a leftover from another system.
+  'inline-flex shrink-0 items-center justify-center rounded-lg font-medium whitespace-nowrap',
+  'transition-[background-color,background-image,border-color,color,transform,box-shadow]',
   'duration-[var(--dur-fast)] ease-[var(--ease-out)]',
   // A barely-perceptible press. Physical feedback, not decoration.
   'active:scale-[0.98]',
@@ -48,8 +61,27 @@ const BASE = cn(
  * this rather than wrapping.
  */
 export function buttonClasses(
-  options: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean } = {},
+  options: {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    fullWidth?: boolean;
+    /**
+     * Fully rounded, with wider side padding to suit the shape.
+     *
+     * For marketing and for the one or two places in the app that are an
+     * invitation rather than a control — connecting a wallet, starting an
+     * escrow. Deliberately not the default: a form full of pills reads as a
+     * landing page, and the application is not one.
+     */
+    pill?: boolean;
+  } = {},
 ): string {
-  const { variant = 'secondary', size = 'md', fullWidth } = options;
-  return cn(BASE, BUTTON_VARIANTS[variant], BUTTON_SIZES[size], fullWidth && 'w-full');
+  const { variant = 'secondary', size = 'md', fullWidth, pill } = options;
+  return cn(
+    BASE,
+    BUTTON_VARIANTS[variant],
+    BUTTON_SIZES[size],
+    pill && 'rounded-full px-6',
+    fullWidth && 'w-full',
+  );
 }

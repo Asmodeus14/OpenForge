@@ -148,9 +148,12 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-lg border border-line bg-surface',
+        // Glass, weighted for reading. The environment behind the application
+        // shows through enough that a card reads as a pane sitting on the sky,
+        // and not so much that an address or an amount becomes hard work.
+        'of-glass-panel rounded-2xl',
         interactive &&
-          'transition-[border-color,box-shadow,transform] duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:border-line-strong hover:shadow-[var(--shadow-md)]',
+          'transition-[border-color,box-shadow,transform] duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:border-line-strong hover:shadow-[var(--shadow-lg)]',
         className,
       )}
       {...props}

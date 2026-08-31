@@ -125,6 +125,23 @@ export function formatPercent(numerator: number, denominator: number): string {
   return `${Math.round(pct)}%`;
 }
 
+/**
+ * Basis points as a percentage, for prose about the protocol fee.
+ *
+ * The fee is an `immutable` on the factory, not a `constant` — a redeployment
+ * can change it, and `PROTOCOL.feeBasisPoints` follows. Writing "1.5%" by hand
+ * is therefore a claim with a shelf life, which is why this lives here rather
+ * than being spelled out at each call site.
+ *
+ * In `lib/` rather than in `components/escrow/intents.tsx`, where it started as
+ * a private const: that module pulls in signers, ABIs and `createElement` to
+ * build transaction intents, and a server-rendered page should not have to
+ * drag all of it in to render a percentage in a sentence.
+ */
+export function feePercent(basisPoints: bigint | number): string {
+  return `${Number(basisPoints) / 100}%`;
+}
+
 /* ---------------------------------------------------------------------- time */
 
 /** Accepts seconds (chain) or milliseconds (JS) and normalises to a Date. */

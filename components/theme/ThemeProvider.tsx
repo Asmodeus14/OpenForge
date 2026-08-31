@@ -8,8 +8,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { resolvePhase, type Phase } from '@/lib/phase';
 
 export type Theme = 'light' | 'dark' | 'system';
+export type { Phase };
 
 const STORAGE_KEY = 'openforge:theme';
 
@@ -25,6 +27,15 @@ const STORAGE_KEY = 'openforge:theme';
 
 const listeners = new Set<() => void>();
 
+/**
+ * How often the environment phase is re-checked while following the clock.
+ *
+ * A minute is far finer than the phase boundaries need — they move four times
+ * a day — but it costs one comparison and it means a visitor who has the page
+ * open at 17:00 watches the sky turn rather than finding it unchanged.
+ */
+const PHASE_TICK_MS = 60_000;
+
 function emit() {
   for (const listener of listeners) listener();
 }
@@ -39,7 +50,7 @@ function emit() {
  */
 function syncAndEmit() {
   const theme = readStored();
-  applyToDocument(theme === 'system' ? systemPrefersDark() : theme === 'dark');
+  applyToDocument(theme === 'system' ? systemPrefersDark() : theme === 'dark', theme);
   emit();
 }
 
@@ -49,11 +60,15 @@ function subscribe(listener: () => void) {
   media.addEventListener('change', syncAndEmit);
   // Another tab may have changed the preference.
   window.addEventListener('storage', syncAndEmit);
+  // The clock moves on its own, and the environment follows it while the
+  // preference is `system`.
+  const tick = window.setInterval(syncAndEmit, PHASE_TICK_MS);
 
   return () => {
     listeners.delete(listener);
     media.removeEventListener('change', syncAndEmit);
     window.removeEventListener('storage', syncAndEmit);
+    window.clearInterval(tick);
   };
 }
 
@@ -74,17 +89,22 @@ function systemPrefersDark(): boolean {
 function getSnapshot(): string {
   const theme = readStored();
   const resolved = theme === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : theme;
-  return `${theme}:${resolved}`;
+  return `${theme}:${resolved}:${resolvePhase(theme, systemPrefersDark())}`;
 }
 
 /** The server cannot know the user's preference; dark is the product default. */
 function getServerSnapshot(): string {
-  return 'system:dark';
+  return 'system:dark:night';
 }
 
-function applyToDocument(dark: boolean) {
-  document.documentElement.classList.toggle('dark', dark);
-  document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+function applyToDocument(dark: boolean, theme: Theme) {
+  const el = document.documentElement;
+  el.classList.toggle('dark', dark);
+  el.style.colorScheme = dark ? 'dark' : 'light';
+  // The environment reads this. `ThemeScript` has already set it for the first
+  // paint; this is what keeps it correct afterwards, when the preference
+  // changes or the clock crosses a boundary.
+  el.setAttribute('data-phase', resolvePhase(theme, systemPrefersDark()));
 }
 
 interface ThemeContextValue {
@@ -92,6 +112,8 @@ interface ThemeContextValue {
   theme: Theme;
   /** What is actually rendered right now. */
   resolved: 'light' | 'dark';
+  /** Which point in the day the environment is drawn at. */
+  phase: Phase;
   setTheme: (theme: Theme) => void;
 }
 
@@ -99,7 +121,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const [theme, resolved] = snapshot.split(':') as [Theme, 'light' | 'dark'];
+  const [theme, resolved, phase] = snapshot.split(':') as [Theme, 'light' | 'dark', Phase];
 
   const setTheme = useCallback((next: Theme) => {
     try {
@@ -108,13 +130,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Storage unavailable in private mode; the theme still applies now.
     }
-    applyToDocument(next === 'system' ? systemPrefersDark() : next === 'dark');
+    applyToDocument(next === 'system' ? systemPrefersDark() : next === 'dark', next);
     emit();
   }, []);
 
   const value = useMemo(
-    () => ({ theme, resolved, setTheme }),
-    [theme, resolved, setTheme],
+    () => ({ theme, resolved, phase, setTheme }),
+    [theme, resolved, phase, setTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -23,6 +23,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
   fullWidth?: boolean;
+  /** Fully rounded. For invitations, not for form controls. */
+  pill?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -33,6 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     leadingIcon,
     trailingIcon,
     fullWidth,
+    pill,
     className,
     children,
     disabled,
@@ -47,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(buttonClasses({ variant, size, fullWidth }), className)}
+      className={cn(buttonClasses({ variant, size, fullWidth, pill }), className)}
       {...props}
     >
       {loading ? (
@@ -74,9 +77,8 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 
 const ICON_BUTTON_VARIANTS = {
   ghost: 'text-fg-secondary hover:bg-subtle hover:text-fg',
-  secondary:
-    'border border-line bg-surface text-fg hover:border-line-strong hover:bg-subtle',
-  primary: 'bg-accent text-fg-on-accent hover:bg-accent-hover active:bg-accent-active',
+  secondary: 'of-btn-face border border-line text-fg hover:border-line-strong',
+  primary: 'of-btn-primary text-fg-on-accent',
 } as const;
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
@@ -91,8 +93,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         aria-label={label}
         title={label}
         className={cn(
-          'inline-flex shrink-0 items-center justify-center rounded-md',
-          'transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]',
+          'inline-flex shrink-0 items-center justify-center rounded-lg',
+          'transition-[background-color,background-image,border-color,color,transform,box-shadow]',
+          'duration-[var(--dur-fast)] ease-[var(--ease-out)]',
           'active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40',
           size === 'sm' ? 'size-8' : 'size-10',
           ICON_BUTTON_VARIANTS[variant],

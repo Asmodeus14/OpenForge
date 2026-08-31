@@ -59,10 +59,15 @@ export function TopBar() {
     <>
       <header
         className={cn(
-          'sticky top-0 z-[var(--z-header)] border-b border-line',
-          // Translucent, so content scrolling underneath reads as depth
-          // rather than the bar floating detached from the page.
-          'bg-canvas/80 backdrop-blur-xl backdrop-saturate-150',
+          'sticky top-0 z-[var(--z-header)]',
+          // The same glass the marketing site is built from, so crossing into
+          // the app does not feel like crossing into a different product.
+          //
+          // Full width rather than a floating pill: the sidebar is offset from
+          // `top-14` and `/messages` sizes itself to `100dvh - 3.5rem`, so
+          // detaching this bar would silently break two layouts to gain a
+          // shape the application does not need.
+          'of-glass of-glass-thick rounded-none border-x-0 border-t-0',
         )}
       >
         <div className="flex h-14 items-center gap-3 px-4 sm:px-5">

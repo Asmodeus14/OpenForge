@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/States';
 import { ProjectCard, type ProjectCardData } from '@/components/projects/ProjectCard';
+import { cn } from '@/lib/cn';
 
 /**
  * The interactive half of Discover.
@@ -72,7 +73,16 @@ export function DiscoverList({
           }
         />
       ) : (
-        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul
+          className={cn(
+            'mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3',
+            // One result should not sit in the first cell of a three-track
+            // grid with two empty tracks beside it. An almost-empty grid reads
+            // as content that failed to load rather than as a registry with a
+            // single entry, so a lone card collapses to its own column.
+            filtered.length === 1 && 'max-w-sm sm:grid-cols-1 lg:grid-cols-1',
+          )}
+        >
           {filtered.map((project) => (
             <li key={project.projectId} className="flex">
               <ProjectCard project={project} />

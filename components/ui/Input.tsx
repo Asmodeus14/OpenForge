@@ -10,16 +10,7 @@ import {
 } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
-
-const FIELD = cn(
-  'w-full rounded-md bg-surface text-fg placeholder:text-fg-muted',
-  'border border-line shadow-[var(--shadow-sm)]',
-  'transition-[border-color,box-shadow] duration-[var(--dur-fast)] ease-[var(--ease-out)]',
-  'hover:border-line-strong',
-  // A ring rather than a thicker border, so focus never shifts layout.
-  'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-subtle',
-  'disabled:cursor-not-allowed disabled:opacity-50',
-);
+import { FIELD } from './fieldStyles';
 
 function Field({
   id,

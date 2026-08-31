@@ -35,8 +35,8 @@ import {
 
 /** A deadline comfortably ahead, so showcase pills are not 'overdue'. */
 const FUTURE = BigInt(Math.floor(Date.now() / 1000) + 30 * 86_400);
-import { DEFAULT_CHAIN, calculateFee, calculateNetAmount } from '@/chain/config';
-import { formatTokenAmount } from '@/lib/format';
+import { DEFAULT_CHAIN, PROTOCOL, calculateFee, calculateNetAmount } from '@/chain/config';
+import { feePercent, formatDuration, formatTokenAmount } from '@/lib/format';
 
 /**
  * Design system reference.
@@ -79,7 +79,10 @@ export default function DesignPage() {
       { label: 'Milestone', value: 'Authentication V2' },
       { label: 'Recipient', value: <AddressDisplay address={ADDRESS} showExplorer={false} /> },
       { label: 'Milestone amount', value: <TokenAmount amount={AMOUNT} token={TOKEN} /> },
-      { label: 'Platform fee (1.5%)', value: <TokenAmount amount={fee} token={TOKEN} /> },
+      {
+        label: `Platform fee (${feePercent(PROTOCOL.feeBasisPoints)})`,
+        value: <TokenAmount amount={fee} token={TOKEN} />,
+      },
       {
         label: 'Developer receives',
         value: <TokenAmount amount={net} token={TOKEN} size="prominent" />,
@@ -88,7 +91,7 @@ export default function DesignPage() {
       { label: 'Network', value: DEFAULT_CHAIN.label },
     ],
     disclosures: [
-      'A 1.5% platform fee is deducted on release and sent to a fixed address. No fee is charged on disputes or cancellations.',
+      `A ${feePercent(PROTOCOL.feeBasisPoints)} platform fee is deducted on release and sent to a fixed address. No fee is charged on disputes or cancellations.`,
       'Releasing a milestone is final. The funds cannot be recalled once the transaction confirms.',
     ],
     failureReassurance: 'Your funds have NOT been released.',
@@ -274,10 +277,20 @@ export default function DesignPage() {
               />
             </div>
             <DisclosureNote>
-              A 1.5% platform fee is deducted on release. No fee is charged on disputes.
+              A {feePercent(PROTOCOL.feeBasisPoints)} platform fee is deducted on release.
+              No fee is charged on disputes.
             </DisclosureNote>
+            {/* This read "The funder can resolve a dispute immediately. You
+                must wait 30 days." — which is not a stale number but a
+                description of the v1 asymmetry that let the funder win every
+                dispute by construction. That was fixed before the v2 deploy
+                (see `PROTOCOL.disputeWindowSeconds`), and a reference page
+                demonstrating the caution tone with copy describing a patched
+                vulnerability is how the sentence gets pasted somewhere real. */}
             <DisclosureNote tone="caution">
-              The funder can resolve a dispute immediately. You must wait 30 days.
+              You can raise one dispute. It freezes the funder&rsquo;s reclaim for{' '}
+              {formatDuration(PROTOCOL.disputeWindowSeconds)} and then lapses; it awards
+              nothing to either side.
             </DisclosureNote>
           </div>
 
@@ -287,7 +300,10 @@ export default function DesignPage() {
                 facts={[
                   { label: 'Milestone', value: 'Authentication V2' },
                   { label: 'Recipient', value: <AddressDisplay address={ADDRESS} showExplorer={false} /> },
-                  { label: 'Fee (1.5%)', value: <TokenAmount amount={fee} token={TOKEN} /> },
+                  {
+                    label: `Fee (${feePercent(PROTOCOL.feeBasisPoints)})`,
+                    value: <TokenAmount amount={fee} token={TOKEN} />,
+                  },
                   {
                     label: 'Developer receives',
                     value: <TokenAmount amount={net} token={TOKEN} size="prominent" />,

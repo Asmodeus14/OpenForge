@@ -58,7 +58,16 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center px-6 py-20 text-center', className)}>
+    <div
+      className={cn(
+        // Bounded and centred as a block, rather than centred items spread
+        // across the full application column. At 1120px wide with 80px of
+        // padding above and below, this read as a hole in the page that
+        // happened to have words in it.
+        'mx-auto flex max-w-md flex-col items-center px-6 py-14 text-center',
+        className,
+      )}
+    >
       {icon && (
         <div className="mb-5 flex size-12 items-center justify-center rounded-xl border border-line bg-subtle text-fg-muted">
           {icon}
