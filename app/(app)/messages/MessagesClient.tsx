@@ -335,7 +335,7 @@ export function MessagesClient({
                     onClick={() => setRoomId(room.id)}
                     aria-current={room.id === roomId ? 'true' : undefined}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left',
+                      'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left',
                       'text-secondary transition-colors duration-[var(--dur-fast)]',
                       room.id === roomId
                         ? 'bg-subtle font-medium text-fg'

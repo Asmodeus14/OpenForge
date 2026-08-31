@@ -36,7 +36,7 @@ function SearchTrigger() {
       type="button"
       onClick={palette.open}
       className={cn(
-        'group flex h-9 w-full max-w-sm items-center gap-2.5 rounded-md',
+        'group flex h-9 w-full max-w-sm items-center gap-2.5 rounded-lg',
         'border border-line bg-subtle px-3',
         'text-secondary text-fg-muted',
         'transition-colors duration-[var(--dur-fast)] hover:border-line-strong hover:text-fg-secondary',

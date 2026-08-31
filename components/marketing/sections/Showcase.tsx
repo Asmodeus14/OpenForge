@@ -139,10 +139,13 @@ export function Showcase() {
             </div>
 
             <div className="flex items-center justify-end gap-2.5 border-t border-line bg-subtle px-5 py-3.5">
-              <span className="rounded-md px-3 py-1.5 text-secondary text-fg-secondary">
+              {/* The real button material, at the real radius. A mock of the
+                  product that renders the previous generation of its own
+                  buttons is a picture of a screen that no longer exists. */}
+              <span className="rounded-lg px-3 py-1.5 text-secondary text-fg-secondary">
                 Cancel
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-secondary font-medium text-fg-on-accent">
+              <span className="of-btn-primary inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-secondary font-medium text-fg-on-accent">
                 Release 2,364.00 tUSDC
                 <ArrowRight className="size-3.5" aria-hidden />
               </span>

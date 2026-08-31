@@ -67,7 +67,10 @@ export function TagInput({
 
       <div
         className={cn(
-          'flex flex-wrap items-center gap-1.5 rounded-md border bg-surface px-2 py-2',
+          // `lg`, matching `FIELD`. This sits beside `Input`s on the same
+          // forms, and a field with a different corner radius to the field
+          // above it is the mismatch `fieldStyles.ts` exists to prevent.
+          'flex flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2 py-2',
           'shadow-[var(--shadow-sm)] transition-colors duration-[var(--dur-fast)]',
           'focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-subtle',
           error ? 'border-danger-line' : 'border-line',

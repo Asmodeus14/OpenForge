@@ -37,14 +37,3 @@ export function resolvePhase(
 
   return phase;
 }
-
-const LABELS: Record<Phase, string> = {
-  dawn: 'Sunrise',
-  day: 'Daytime',
-  dusk: 'Sunset',
-  night: 'Night',
-};
-
-export function phaseLabel(phase: Phase): string {
-  return LABELS[phase];
-}

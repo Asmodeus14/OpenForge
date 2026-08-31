@@ -295,9 +295,12 @@ export function DashboardMock({ className }: { className?: string }) {
             {DEFAULT_CHAIN.name}.
           </p>
 
+          {/* Abstract primary and secondary buttons. They carry the product's
+              real button material rather than a flat accent fill, so the mock
+              stays a picture of the current UI. */}
           <div className="mt-4 flex flex-col gap-1.5">
-            <span className="h-7 rounded-md bg-accent" />
-            <span className="h-7 rounded-md border border-line bg-surface" />
+            <span className="of-btn-primary block h-7 rounded-lg" />
+            <span className="of-btn-face block h-7 rounded-lg border border-line" />
           </div>
         </aside>
       </div>

@@ -80,7 +80,7 @@ export function WalletStatus() {
         <button
           type="button"
           className={cn(
-            'flex items-center gap-2 rounded-md py-1 pl-1 pr-2',
+            'flex items-center gap-2 rounded-lg py-1 pl-1 pr-2',
             'transition-colors duration-[var(--dur-fast)] hover:bg-subtle',
           )}
         >

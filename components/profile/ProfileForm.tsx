@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImagePlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { buttonClasses } from '@/components/ui/buttonStyles';
 import { Input, Textarea } from '@/components/ui/Input';
 import { TagInput } from '@/components/ui/TagInput';
 import { Alert } from '@/components/ui/States';
@@ -193,7 +194,11 @@ export function ProfileForm({
 
               <div className="flex flex-wrap gap-2">
                 <label className="cursor-pointer">
-                  <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-surface px-3.5 text-secondary font-medium text-fg transition-colors hover:bg-subtle">
+                  {/* A `<span>` rather than a `<button>` because the real
+                      control is the file input this label wraps — but it has
+                      to *look* like a secondary button, so it takes the shared
+                      styles instead of restating them and drifting. */}
+                  <span className={buttonClasses({ variant: 'secondary', size: 'sm' })}>
                     <ImagePlus className="size-3.5" aria-hidden />
                     {avatar ? 'Choose another' : 'Choose an image'}
                   </span>

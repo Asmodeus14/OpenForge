@@ -57,8 +57,14 @@ export function Toaster() {
           ].join(' '),
           title: 'text-secondary font-medium text-fg',
           description: 'text-meta text-fg-secondary',
-          actionButton: 'rounded-md bg-accent px-2.5 py-1 text-micro font-medium text-fg-on-accent',
-          cancelButton: 'rounded-md bg-subtle px-2.5 py-1 text-micro font-medium text-fg-secondary',
+          // The shared button material, not a hand-mixed copy of it. These
+          // carried `rounded-md bg-accent` inside a toast that had already
+          // moved to `rounded-lg` — the buttons were visibly out of step with
+          // their own container, and with every other button in the product.
+          actionButton:
+            'of-btn-primary rounded-lg px-2.5 py-1 text-micro font-medium text-fg-on-accent',
+          cancelButton:
+            'of-btn-face rounded-lg px-2.5 py-1 text-micro font-medium text-fg-secondary',
           closeButton: 'border-line bg-elevated text-fg-muted hover:text-fg',
           // Semantic tones borrow the same subtle/line pairs every other status
           // surface uses, so a success toast and a success badge are the same

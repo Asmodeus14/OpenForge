@@ -128,8 +128,8 @@ Full table and the storage-layout reasoning: `OpenForge-Contracts/docs/GAS_OPTIM
 - ~~`'Platform fee (1.5%)'` is hardcoded in `components/escrow/intents.tsx`.~~
   **Fixed.** `intents.tsx` computes it from `feeBps`. The remaining hardcodes
   were on `/funding`, which now uses the shared `feePercent` helper in
-  `lib/format.ts`. `EscrowIllustration` keeps its literal deliberately — it is
-  a fixed illustration whose arithmetic is the point.
+  `lib/format.ts`. (`EscrowIllustration`, which kept its literal deliberately,
+  was deleted with the old landing page.)
 - ~~Four unused runtime dependencies in the frontend (`sonner`, three Radix
   packages).~~ **Fixed.** The three Radix packages (`react-popover`,
   `react-select`, `react-tooltip`) are removed. `sonner` is now mounted as the
@@ -185,7 +185,10 @@ Not previously recorded. Ordered by consequence.
   for it, and the field being typed into should not still be moving.
 - **The hero headline had two orphans.** A hard `<br />` left over from a
   fixed-size headline fought the fluid `clamp`, producing four lines with
-  "work" and "time." alone. Replaced with `text-balance`.
+  "work" and "time." alone. Fixed with `text-balance`. The redesign later
+  reintroduced a break deliberately — the new headline is two authored beats —
+  and the two now coexist: the `<br />` sets the split, `text-balance` evens
+  what falls either side of it.
 - **`FundingProgress` read as a divider** — 6px tall across a 1000px column, in
   a list whose rows are separated by hairlines. Constrained and thickened; its
   `aria-label` also stopped at two of the three segments it renders.
@@ -219,8 +222,12 @@ Worth recording so they do not get "improved":
   concatenated user input anywhere.
 - **Message ownership is enforced in SQL**, not in JavaScript, so there is no
   check to forget.
-- **Every frontend server loader is parallel.** There is not a single `await`
-  inside a `for` loop in the codebase.
+- **Every frontend server loader is parallel.** No loader in `lib/server/`
+  awaits inside a loop; they fan out with `Promise.all`. (This was once stated
+  as "not a single `await` inside a `for` loop in the codebase", which is no
+  longer true and was the wrong claim anyway: `app/api/ipfs/route.ts` walks its
+  Pinata credentials sequentially on purpose, because the point is to stop at
+  the first one that works.)
 - **The accessibility layer**: `IconButton` requires a label, fields are wired
   with `useId`, status is never colour alone, and there is a global
   `:focus-visible`.

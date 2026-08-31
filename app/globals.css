@@ -250,13 +250,19 @@
   --spacing: 0.25rem;
 
   /* -------------------------------------------------------------- radius
-     Generous but never pill. Pills are reserved for status only. */
+     A pill marks an invitation or a status — a call to action, a badge, a
+     switch. Never a form control: a page of pill-shaped inputs reads as a
+     landing page, and the application is not one.
+
+     The annotations below moved down a step in the redesign. Buttons and
+     inputs were `md`; at 8px inside a 16px panel they read as a leftover from
+     another system. */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px; /* buttons, inputs */
-  --radius-lg: 12px; /* cards, panels */
+  --radius-md: 8px; /* chips, tags, menu rows, small wells */
+  --radius-lg: 12px; /* buttons, inputs, controls */
   --radius-xl: 16px; /* dialogs */
-  --radius-2xl: 20px; /* sheets, marketing surfaces */
+  --radius-2xl: 20px; /* cards, panels, sheets, marketing surfaces */
 
   /* -------------------------------------------------------------- layout */
   --container-content: 45rem; /* 720 — prose */
@@ -273,7 +279,9 @@
      One easing curve for almost everything. It decelerates hard, which is
      what makes movement read as physical rather than linear. */
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* `--ease-in-out` used to sit here and had no consumers — the one place that
+     looked like one, the environment's phase crossfade, uses Tailwind's own
+     `ease-in-out` utility. One curve does almost everything in this product. */
 }
 
 /* Durations and z-index live outside @theme: they are consumed through
@@ -283,7 +291,10 @@
   --dur-instant: 100ms;
   --dur-fast: 160ms;
   --dur-base: 220ms;
-  --dur-slow: 320ms;
+  /* There was a `--dur-slow: 320ms` here with no consumers. Nothing in the
+     product animates for that long: the longest is the environment's phase
+     crossfade, which is ambient rather than interface and carries its own
+     `--env-transition`. A token nobody uses is a suggestion to start. */
 
   --z-sticky: 20;
   --z-header: 30;

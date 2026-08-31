@@ -207,7 +207,11 @@ export function CreateProjectForm() {
                 type="button"
                 onClick={() => onPickCover(null)}
                 aria-label="Remove cover image"
-                className="absolute right-2 top-2 rounded-md bg-canvas/90 p-1.5 text-fg-secondary backdrop-blur transition-colors hover:text-fg"
+                // The shared glass, not a hand-mixed approximation of it. This
+                // was `bg-canvas/90` with a bare `backdrop-blur` — no
+                // saturation, no rim, no glass shadow — which is exactly the
+                // pattern `.of-glass` was extracted to replace.
+                className="of-glass absolute right-2 top-2 rounded-lg p-1.5 text-fg-secondary transition-colors hover:text-fg"
               >
                 <X className="size-4" aria-hidden />
               </button>

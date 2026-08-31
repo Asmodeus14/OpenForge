@@ -13,10 +13,23 @@ Everything lives in `@theme inline` in `app/globals.css`, which is what makes
 the theme swappable at runtime: the Tailwind utilities resolve through CSS
 variables rather than being compiled to fixed values.
 
-**Never write a raw colour in a component.** There are none anywhere in
-`app/` or `components/` outside the two `theme-color` meta values, and a grep
-for Tailwind palette classes (`bg-zinc-900`, `text-purple-600`, …) returns
-nothing. Those literals are how a product ends up with nine different greys.
+**Never write a raw colour in a component, except where a token cannot
+reach.** Those literals are how a product ends up with nine different greys, so
+the exemptions are named rather than left to judgement. There are exactly
+three:
+
+1. **Absolute-black scrims.** `bg-black/40` behind dialogs and the command
+   palette. A scrim is not a surface — it is the absence of one — and tinting
+   it with a theme colour makes it read as a coloured wash.
+2. **Gradient stops inside a self-contained illustration.** The `SkyToggle`
+   thumb and the village lights in `Terrain` mix their own colour because they
+   are lights, not surfaces, and no token describes "the sun at 40% down".
+3. **`app/global-error.tsx`.** It renders when the root layout has failed, so
+   the stylesheet may never have loaded. Every value in it must be literal or
+   it has no colours at all.
+
+Anything outside those three is a bug. This list was previously an absolute
+"there are none anywhere", which the redesign quietly falsified.
 
 ### Surfaces
 
@@ -129,15 +142,21 @@ scrolls sideways.
 
 ## Motion
 
-| Token | Duration |
-|---|---|
-| `--dur-instant` | 100 ms |
-| `--dur-fast` | 160 ms |
-| `--dur-base` | 220 ms |
-| `--dur-slow` | 320 ms |
+| Token | Duration | Used for |
+|---|---|---|
+| `--dur-instant` | 100 ms | Press feedback, table row tints, the palette backdrop |
+| `--dur-fast` | 160 ms | Hover, focus, overlay *exits* |
+| `--dur-base` | 220 ms | Overlay *entrances* |
+
+There is no `--dur-slow`. It existed at 320 ms with no consumers and was
+removed — nothing in the interface animates that long. The one thing that does
+is the environment's phase crossfade at `--env-transition` (1200 ms), and that
+is ambient rather than interface.
 
 `--ease-out: cubic-bezier(0.32, 0.72, 0, 1)` — the decelerating curve that
-makes a surface feel like it settled rather than stopped.
+makes a surface feel like it settled rather than stopped. It is very nearly the
+only curve in the product; the exception is the `SkyToggle` thumb, which uses a
+back-out curve so the switch feels thrown rather than repositioned.
 
 Motion is confined to state changes: hover tints, overlay entrances and exits,
 a barely-perceptible `active:scale-[0.98]` on press. Nothing decorative,
@@ -186,6 +205,101 @@ catching here.
 There is no global net any more; the net was what broke the spinners.
 
 ---
+
+## Glass
+
+A material, described by four values — the tint, the edge, the highlight that
+reads as light catching the top rim, and the shadow that separates it from what
+is behind. Tokens: `--glass-bg`, `--glass-border`, `--glass-highlight`,
+`--glass-shadow`, plus `--panel-bg` for the application weight.
+
+| Class | Where | What it is |
+|---|---|---|
+| `.of-glass` | marketing nav, hero badge, `SkyToggle`, the cover-remove button | Real translucency + 20px blur |
+| `.of-glass-thick` | nav, top bar, tab bar | 40px blur, added on top of `.of-glass` |
+| `.of-glass-panel` | app sidebar, `Card` | App weight — far more opaque |
+| `.of-panel` | bento tiles, `DashboardMock`, the active sidebar row | Solid fill, same rim and shadow |
+| `.of-btn-face` / `-primary` / `-danger` | every button | Control-scale material |
+
+Two rules decide between them.
+
+**Glass only where something is behind it.** Over a flat section background,
+translucency has nothing to reveal and degrades into a slightly muddy card.
+Mid-page panels take `.of-panel`, which keeps the parts of the language that
+survive opacity — lit rim, deep shadow, a faint vertical gradient so a face
+looks curved rather than printed — and drops the blur, which would otherwise
+cost a full-surface repaint for no visible gain. This is also why the
+application has an environment behind it at all: the chrome was rebuilt in
+glass and looked identical to what it replaced until there was something to
+refract.
+
+**Application panels are markedly more opaque than marketing ones** — 0.86
+against 0.55 in light. They carry addresses and amounts, and a figure misread
+by a digit is a different figure. Legibility outranks atmosphere wherever money
+is on screen.
+
+Buttons take the material **without `backdrop-filter`**. A blurred backdrop is
+a real per-element cost — each one is its own backdrop root — and a form can
+carry a dozen buttons where a page carries two panels. What reads as glass at
+36px is the lit rim, a translucent face and a soft shadow; the blur is the part
+nobody notices missing and the part that is expensive. Filled variants get a
+vertical gradient and a coloured glow (`--accent-glow`, `--danger-glow`); on
+press the glow collapses to an inset shadow, so the control reads as pushed
+rather than merely shrunk.
+
+`prefers-reduced-transparency: reduce` and `prefers-contrast: more` both drop
+the blur and go solid.
+
+## Environment
+
+The marketing site and the application share a sky. It is procedural — layered
+gradients, one rasterised fractal-noise cloud filter, a seeded star field, two
+SVG mountain ranges — because there are no image assets in this repository and
+photography could not recolour, could not follow the clock, and would be wrong
+at half the viewport sizes it landed in. It costs zero network bytes.
+
+Components live in `components/marketing/environment/`. `Environment` takes
+`terrain` and `intensity`: the landing page gets both at full strength, the
+application runs `terrain={false} intensity={0.5}`, because a ridgeline behind
+a milestone ledger is scenery arguing with data.
+
+Four phases — `dawn`, `day`, `dusk`, `night` — as `--env-*` palettes selected
+by `data-phase` on `<html>`. Nothing re-renders when the phase changes; a set
+of custom properties interpolates over `--env-transition`.
+
+**The phase is resolved before first paint, and the logic is deliberately
+duplicated.** `lib/phase.ts` holds `resolvePhase`; the same bands are restated
+inside the inline string in `components/theme/ThemeScript.tsx`, because that
+script runs before React exists and cannot import. **If you change the hours in
+one, change them in the other** — otherwise the sky shifts on hydration. Both
+files carry this warning.
+
+An explicit theme pins the phase to an endpoint: light means day, dark means
+night. Only `system` follows the clock, which is what finally gives that option
+a meaning beyond reading one media query. `ThemeProvider` re-checks once a
+minute so a visitor at 17:00 watches it turn.
+
+## Marketing
+
+`components/marketing/` splits four ways: `environment/` (the sky),
+`primitives/` (`Reveal`, `SectionHeading`), `product/` (`DashboardMock`), and
+`sections/` (the nine sections and the nav).
+
+The page order descends from atmosphere to evidence — hero, the release moment,
+the five-step mechanism, the limits, the parts, the wiring, the code, the
+source, the invitation. Someone who stops reading at any point has still been
+told the truth up to there.
+
+Everything in `product/` is real DOM rather than screenshots: it themes itself,
+stays sharp at any density, and cannot go stale the way a PNG of a UI does the
+first time the UI changes. **The figures in it are arithmetically real** — the
+milestones sum to the total, the fee is `PROTOCOL.feeBasisPoints` applied to
+it — and the addresses are the deployed ones. A hero mock is not exempt from
+the rule against inventing numbers; it is the most-looked-at number on the site.
+
+`Reveal` hides its children until an `IntersectionObserver` fires. **Any page
+using it must also render `RevealNoScript` once**, or a reader with scripting
+blocked — and any crawler without a JS runtime — gets a blank page.
 
 ## Components
 

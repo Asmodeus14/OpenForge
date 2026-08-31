@@ -1,14 +1,14 @@
 import Link from 'next/link';
-import { buttonClasses } from '@/components/ui/buttonStyles';
 import { Logo } from '@/components/ui/Logo';
-import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { DEFAULT_CHAIN } from '@/chain/config';
 
 /**
- * Marketing chrome.
+ * The marketing footer.
  *
- * Deliberately thin. The landing page's job is to explain one idea clearly,
- * and a navigation bar with eight destinations works against that.
+ * This file also held `MarketingHeader`, a full-width bordered bar. The
+ * redesign replaced it with `sections/MarketingNav` — a floating glass pill
+ * the sky runs behind — and the old header sat here unimported afterwards,
+ * carrying the last hand-written `bg-canvas/80 backdrop-blur` in the codebase.
  */
 
 function Wordmark() {
@@ -16,22 +16,6 @@ function Wordmark() {
     <Link href="/" aria-label="OpenForge home">
       <Logo />
     </Link>
-  );
-}
-
-export function MarketingHeader() {
-  return (
-    <header className="sticky top-0 z-[var(--z-header)] border-b border-line bg-canvas/80 backdrop-blur-xl backdrop-saturate-150">
-      <div className="mx-auto flex h-14 max-w-(--container-app) items-center justify-between gap-4 px-5 sm:px-8">
-        <Wordmark />
-        <div className="flex items-center gap-3">
-          <ThemeToggle className="hidden sm:inline-flex" />
-          <Link href="/overview" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
-            Open the app
-          </Link>
-        </div>
-      </div>
-    </header>
   );
 }
 
